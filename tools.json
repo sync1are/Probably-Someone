@@ -1,0 +1,191 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "take_screenshot",
+        "description": "Captures a screenshot of the entire screen or active window. Use this when the user asks what's on their screen, to see their screen, or to help with something visible.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["full", "active_window"],
+              "description": "Whether to capture the full screen or just the active window. Default is 'full'."
+            }
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "search_web",
+        "description": "Searches the web for information. Use this when the user asks about current events, facts you don't know, or anything requiring up-to-date information.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query to look up"
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "open_application",
+        "description": "Opens an application or program on the computer. Use this when the user asks to open, launch, or start an application.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "app_name": {
+              "type": "string",
+              "description": "Name of the application to open (e.g., 'notepad', 'chrome', 'calculator')"
+            }
+          },
+          "required": ["app_name"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Reads the contents of a file from the file system. Use this when the user asks about file contents or wants to know what's in a file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "The full path to the file to read"
+            }
+          },
+          "required": ["file_path"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "write_file",
+        "description": "Writes or creates a file with the specified content. Use this when the user asks to create a file, save something, or write content to disk.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "The full path where the file should be saved"
+            },
+            "content": {
+              "type": "string",
+              "description": "The content to write to the file"
+            }
+          },
+          "required": ["file_path", "content"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "execute_command",
+        "description": "Executes a system command or shell command. Use this when the user asks to run a command, execute something in the terminal, or perform system operations.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "The command to execute"
+            }
+          },
+          "required": ["command"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_system_info",
+        "description": "Gets system information like CPU usage, memory usage, disk space, etc. Use this when the user asks about computer performance or system status.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "info_type": {
+              "type": "string",
+              "enum": ["cpu", "memory", "disk", "all"],
+              "description": "Type of system information to retrieve"
+            }
+          },
+          "required": ["info_type"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "set_reminder",
+        "description": "Sets a reminder or alarm for a specific time. Use this when the user asks to remind them about something or set an alarm.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "The reminder message"
+            },
+            "time": {
+              "type": "string",
+              "description": "When to trigger the reminder (e.g., '5 minutes', '2 hours', '3:30 PM')"
+            }
+          },
+          "required": ["message", "time"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Gets current weather information for a location. Use this when the user asks about weather conditions.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "City name or location to get weather for"
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "control_volume",
+        "description": "Controls system volume. Use this when the user asks to change volume, mute, or unmute.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["set", "increase", "decrease", "mute", "unmute"],
+              "description": "Action to perform on volume"
+            },
+            "value": {
+              "type": "integer",
+              "description": "Volume level (0-100) when action is 'set', or amount to increase/decrease by",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": ["action"]
+        }
+      }
+    }
+  ]
+}
