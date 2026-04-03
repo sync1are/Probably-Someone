@@ -11,6 +11,9 @@ kokoro==0.9.4
 pyautogui==0.9.54
 Pillow==10.3.0
 
+# Spotify integration
+spotipy==2.23.0
+
 # For PyTorch with CUDA 12.1 support, install separately with:
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 

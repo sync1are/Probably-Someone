@@ -186,6 +186,88 @@
           "required": ["action"]
         }
       }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_play",
+        "description": "Play a specific song, artist, or playlist on Spotify, or resume current playback. Use this when user asks to play music, resume playback, or start a specific song.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query for the track, artist, or playlist to play. If not provided, resumes current playback."
+            }
+          },
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_pause",
+        "description": "Pause the current Spotify playback. Use this when user asks to pause, stop, or halt music.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_skip_next",
+        "description": "Skip to the next track in Spotify queue. Use this when user asks to skip, next track, or play the next song.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_skip_previous",
+        "description": "Go back to the previous track on Spotify. Use this when user asks to go back, previous track, or replay last song.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_add_to_queue",
+        "description": "Search for a song and add it to the Spotify playback queue. Use this when user asks to queue a song or add to queue.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query for the track to add to queue"
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_current_track",
+        "description": "Get information about the currently playing track on Spotify. Use this when user asks what's playing, current song, or now playing.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
     }
   ]
 }
