@@ -142,10 +142,14 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
         return None, '\n'.join(direct_responses)
     
     # Otherwise, get final response from LLM for natural language
+    # Check if this is a vision request (has images in conversation)
+    has_images = any('images' in msg for msg in conversation_history if isinstance(msg, dict))
+
     final_response = llm_client.chat(
         model=DEFAULT_MODEL,
         messages=conversation_history,
-        stream=True
+        stream=True,
+        think=has_images  # Enable thinking for vision analysis
     )
     
     return final_response, None

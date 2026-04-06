@@ -149,7 +149,7 @@
       "type": "function",
       "function": {
         "name": "spotify_current_track",
-        "description": "Get currently playing track info.",
+        "description": "Get the name, artist, and album of the currently playing track. Use when user asks 'what song is this', 'what's playing', 'song name', 'current song', or 'what am I listening to'.",
         "parameters": {
           "type": "object",
           "properties": {},

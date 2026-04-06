@@ -19,7 +19,7 @@ SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI', 'http://127.0.0.1:8888/
 
 # Model Configuration
 DEFAULT_MODEL = 'gemma4:e2b'
-VISION_MODEL = 'gemma4:e2b'
+VISION_MODEL = 'gemma4:31b-cloud'
 
 # TTS Configuration
 TTS_VOICE = 'af_heart'

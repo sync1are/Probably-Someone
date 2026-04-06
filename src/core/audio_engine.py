@@ -1,46 +1,56 @@
-"""Audio and TTS management using Kokoro pipeline."""
+"""Audio and TTS management using remote TTS server."""
 
 import re
 import threading
 import queue
 import sounddevice as sd
+import requests
+import numpy as np
 from src.config import TTS_VOICE, TTS_SPEED, TTS_SAMPLE_RATE, AUDIO_QUEUE_SIZE, TTS_BUFFER_THRESHOLD
 
 
 class AudioEngine:
     """Manages TTS generation and audio playback."""
-    
-    def __init__(self):
-        self.pipeline = None  # Lazy load on first use
+
+    def __init__(self, tts_server_url="http://127.0.0.1:8889/generate"):
+        self.tts_server_url = tts_server_url
         self.audio_queue = queue.Queue(maxsize=AUDIO_QUEUE_SIZE)
         self.text_queue = queue.Queue()
         self.stop_signal = threading.Event()
-        self.pipeline_ready = False
-        
+        self.server_ready = False
+
         # Start worker threads
         threading.Thread(target=self._audio_player, daemon=True).start()
         threading.Thread(target=self._tts_renderer, daemon=True).start()
-        
-        # Initialize TTS in background
-        threading.Thread(target=self._lazy_init_pipeline, daemon=True).start()
-    
-    def _lazy_init_pipeline(self):
-        """Initialize TTS pipeline in background thread."""
+
+        # Check TTS server connection
+        self._check_server_connection()
+
+    def _check_server_connection(self):
+        """Check if TTS server is accessible."""
         try:
-            print("🔊 Loading TTS engine in background...")
-
-            # Lazy import to avoid blocking main thread startup
-            from kokoro import KPipeline
-
-            self.pipeline = KPipeline(lang_code='a')
-            # Pre-warm
-            for _ in self.pipeline("Ready", voice=TTS_VOICE, speed=TTS_SPEED):
-                pass
-            self.pipeline_ready = True
-            print("✓ TTS engine ready")
+            print(f"🔊 Connecting to TTS server at {self.tts_server_url}...")
+            # Try a simple test request to the generate endpoint
+            response = requests.post(
+                self.tts_server_url,
+                json={"text": "test", "voice": TTS_VOICE, "speed": TTS_SPEED},
+                timeout=10
+            )
+            if response.status_code == 200:
+                self.server_ready = True
+                print("✓ Connected to TTS daemon")
+            else:
+                # Server is reachable but may have different API
+                print(f"⚠️ TTS server responded with status {response.status_code}")
+                print("   Assuming server is ready anyway...")
+                self.server_ready = True  # Assume it's ready, will fail gracefully if not
+        except requests.exceptions.ConnectionError:
+            print(f"⚠️ Could not connect to TTS server at {self.tts_server_url}")
+            print("   Make sure the TTS daemon is running")
+            self.server_ready = False
         except Exception as e:
-            print(f"⚠️ TTS initialization warning: {e}")
-            self.pipeline_ready = False
+            print(f"⚠️ TTS server connection error: {e}")
+            self.server_ready = False
     
     def _clean_text(self, text):
         """Clean text for TTS processing."""
@@ -59,6 +69,8 @@ class AudioEngine:
                 sd.wait()
             except queue.Empty:
                 continue
+            except Exception as e:
+                print(f"\n⚠️ Audio playback error: {e}")
     
     def _tts_renderer(self):
         """TTS rendering worker thread."""
@@ -67,21 +79,65 @@ class AudioEngine:
                 text = self.text_queue.get(timeout=0.1)
                 if text is None or text == "__DONE__":
                     continue
-                
-                # Wait for pipeline to be ready
-                if not self.pipeline_ready or self.pipeline is None:
+
+                # Wait for server to be ready
+                if not self.server_ready:
                     continue
-                
-                generator = self.pipeline(
-                    text,
-                    voice=TTS_VOICE,
-                    speed=TTS_SPEED,
-                    split_pattern=r'\n+'
-                )
-                
-                for _, _, audio in generator:
-                    self.audio_queue.put(audio)
-            
+
+                # Send text to TTS server
+                try:
+                    response = requests.post(
+                        self.tts_server_url,
+                        json={
+                            "text": text,
+                            "voice": TTS_VOICE,
+                            "speed": TTS_SPEED
+                        },
+                        timeout=10
+                    )
+
+                    if response.status_code == 200:
+                        # Convert audio bytes to numpy array
+                        audio_bytes = response.content
+                        buffer_size = len(audio_bytes)
+
+                        # Check if buffer size is valid
+                        if buffer_size == 0:
+                            continue
+
+                        # Try different data types until one works
+                        audio_data = None
+
+                        # Try float32 (4 bytes per element)
+                        if buffer_size % 4 == 0:
+                            try:
+                                audio_data = np.frombuffer(audio_bytes, dtype=np.float32)
+                            except:
+                                pass
+
+                        # Try int16 (2 bytes per element)
+                        if audio_data is None and buffer_size % 2 == 0:
+                            try:
+                                audio_data = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                            except:
+                                pass
+
+                        # Try uint8 (1 byte per element) as last resort
+                        if audio_data is None:
+                            try:
+                                audio_data = np.frombuffer(audio_bytes, dtype=np.uint8).astype(np.float32) / 255.0
+                            except:
+                                print(f"\n⚠️ Could not parse audio buffer of size {buffer_size}")
+                                continue
+
+                        if audio_data is not None and len(audio_data) > 0:
+                            self.audio_queue.put(audio_data)
+                    else:
+                        print(f"\n⚠️ TTS server error: {response.status_code}")
+
+                except requests.exceptions.RequestException as e:
+                    print(f"\n⚠️ TTS request failed: {e}")
+
             except queue.Empty:
                 continue
             except Exception as e:
