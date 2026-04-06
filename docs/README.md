@@ -7,6 +7,7 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 - 🎙️ **Voice Output** - Natural TTS using Kokoro
 - 🎵 **Spotify Control** - Play, pause, skip, queue songs via voice
 - 💬 **Messaging Automation** - Auto-reply on WhatsApp & Discord
+- 📧 **Gmail Integration** - AI can read your important unread emails
 - 📸 **Screenshot Analysis** - AI can see and analyze your screen
 - 📋 **Clipboard Management** - "Summarize what I copied", copy AI responses
 - 🪟 **Window Context** - AI knows what app you're using
@@ -36,6 +37,12 @@ python start_messaging.py
 - **"Add [name] to whitelist"** - Allow auto-reply for specific contacts
 - **"Send [contact] a message"** - Proactive messaging via voice
 - **Single-response mode** - Quick replies without conversation loops
+
+### Gmail Integration
+- **"Do I have any important emails?"** - Read summary of new important emails
+- **"Read me the email from John"** - Read full email content
+- Secure local authentication (OAuth 2.0)
+- Read-only access by default
 
 ### Clipboard Management
 - **"What did I copy?"** - Get clipboard content
@@ -71,6 +78,7 @@ D:\VERISON 3\
 │   │   ├── system_tools.py    # Screenshot, clipboard, etc.
 │   │   ├── spotify_tools.py   # Spotify integration
 │   │   ├── web_tools.py       # Web scraping
+│   │   ├── gmail_tools.py     # Gmail API integration
 │   │   └── messaging_tools.py # Messaging setup/control
 │   ├── messaging/             # Messaging backend
 │   │   ├── controller.py      # Main orchestrator
@@ -136,6 +144,13 @@ npm install
 ### 5. Discord Setup (Optional)
 - See `docs/MESSAGING_GUIDE.md` for detailed Discord token setup
 
+### 6. Gmail Setup (Optional)
+- Go to [Google Cloud Console](https://console.cloud.google.com/)
+- Create a project and enable the **Gmail API**
+- Create OAuth Client ID credentials (Desktop app)
+- Download the JSON and save it as `credentials.json` in the root folder
+- First time you ask to read emails, ARIA will open a browser to authenticate
+
 ## Usage
 
 ```bash
@@ -150,6 +165,12 @@ python app.py
   - "Skip to next song"
   - "What's playing?"
   - "Add Bohemian Rhapsody to queue"
+
+- **Messaging:**
+  - "Do I have any important emails?"
+  - "Read me the email from John"
+  - "Send a message to Mom on WhatsApp"
+  - "Start auto-reply"
 
 - **Screenshot:**
   - "What's on my screen?"

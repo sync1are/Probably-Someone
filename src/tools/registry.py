@@ -31,9 +31,17 @@ from src.tools.messaging_tools import (
     send_message,
     get_last_message
 )
+from src.tools.gmail_tools import (
+    get_important_unread_emails,
+    read_specific_email
+)
 
 # Central tool handler registry
 TOOL_HANDLERS = {
+    # Gmail tools
+    "get_important_unread_emails": get_important_unread_emails,
+    "read_specific_email": read_specific_email,
+
     # System tools
     "take_screenshot": take_screenshot,
     "get_clipboard": get_clipboard,

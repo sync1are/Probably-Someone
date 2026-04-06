@@ -3,6 +3,40 @@
     {
       "type": "function",
       "function": {
+        "name": "get_important_unread_emails",
+        "description": "Checks the user's Gmail inbox for new, important unread emails. Uses Gmail's AI importance markers to filter out newsletters and spam. Use when user asks 'Do I have any important emails?', 'Check my mail', or 'Any new messages in my inbox?'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of emails to retrieve (default is 5)",
+              "default": 5
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_specific_email",
+        "description": "Reads the full content of a specific email by its ID. Use this after get_important_unread_emails if the user asks you to read a specific email out loud.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "email_id": {
+              "type": "string",
+              "description": "The unique ID of the email to read (provided by get_important_unread_emails)"
+            }
+          },
+          "required": ["email_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
         "name": "take_screenshot",
         "description": "Captures a screenshot of the entire screen. Use this when the user asks what's on their screen, to see their screen, or to help with something visible.",
         "parameters": {

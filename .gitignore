@@ -58,6 +58,10 @@ messaging/whatsapp_bridge/.wwebjs_cache/
 Thumbs.db
 desktop.ini
 
+# API credentials
+credentials.json
+token.json
+
 # Test coverage
 htmlcov/
 .coverage
