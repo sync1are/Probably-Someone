@@ -232,6 +232,169 @@
           "required": []
         }
       }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "setup_whatsapp",
+        "description": "Setup WhatsApp auto-reply integration for the FIRST TIME. Shows QR code for authentication. ONLY use if user explicitly asks to 'setup WhatsApp', 'connect WhatsApp', or 'link WhatsApp'. Do NOT use for sending messages.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "setup_discord",
+        "description": "Setup Discord auto-reply integration. Guides user through getting Discord token. Use when user asks to setup Discord, connect Discord, or enable Discord messaging.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "start_messaging",
+        "description": "Start the messaging system (WhatsApp and/or Discord). Use when user asks to start messaging, activate auto-reply, or turn on message responses.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "type": "string",
+              "enum": ["whatsapp", "discord", "both"],
+              "description": "Which platform to start"
+            }
+          },
+          "required": ["platform"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "stop_messaging",
+        "description": "Stop the messaging system. Use when user asks to stop messaging, deactivate auto-reply, or turn off message responses.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "messaging_status",
+        "description": "Check messaging system status and statistics. Use when user asks about messaging status, how many messages sent, or if messaging is active.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "add_messaging_contact",
+        "description": "Add a contact to the messaging whitelist. Use when user wants to add someone to auto-reply list.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "type": "string",
+              "enum": ["whatsapp", "discord"],
+              "description": "Platform for the contact"
+            },
+            "contact": {
+              "type": "string",
+              "description": "Phone number for WhatsApp or user ID for Discord"
+            }
+          },
+          "required": ["platform", "contact"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "manage_whitelist",
+        "description": "Manage messaging whitelist with natural language. Use for: listing contacts, removing contacts, clearing whitelist. Examples: 'show whitelist', 'remove John from WhatsApp', 'clear Discord whitelist', 'who's on the list'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["add", "remove", "list", "clear"],
+              "description": "Action to perform: add, remove, list, or clear"
+            },
+            "platform": {
+              "type": "string",
+              "enum": ["whatsapp", "discord"],
+              "description": "Platform (required for add/remove/clear, optional for list)"
+            },
+            "contact": {
+              "type": "string",
+              "description": "Contact identifier (required for add/remove)"
+            }
+          },
+          "required": ["action"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "send_message",
+        "description": "Send a message to a contact on WhatsApp or Discord. Use when user wants to send a message like 'send hey to John', 'message Mom on WhatsApp', 'text Anas hello'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "type": "string",
+              "enum": ["whatsapp", "discord"],
+              "description": "Platform to send on"
+            },
+            "contact": {
+              "type": "string",
+              "description": "Contact name or phone number"
+            },
+            "message": {
+              "type": "string",
+              "description": "Message to send"
+            }
+          },
+          "required": ["platform", "contact", "message"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_last_message",
+        "description": "Get the last message received from a contact on WhatsApp or Discord. Use when user asks 'what did they say', 'read last message from X', 'show messages from Y', 'what was the last message'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "type": "string",
+              "enum": ["whatsapp", "discord"],
+              "description": "Platform to check"
+            },
+            "contact": {
+              "type": "string",
+              "description": "Contact name or number (optional - if not provided, returns last message from anyone)"
+            }
+          },
+          "required": ["platform"]
+        }
+      }
     }
   ]
 }

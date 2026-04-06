@@ -20,6 +20,17 @@ from src.tools.spotify_tools import (
     spotify_like_current,
     spotify_unlike_current
 )
+from src.tools.messaging_tools import (
+    setup_whatsapp,
+    setup_discord,
+    start_messaging,
+    stop_messaging,
+    messaging_status,
+    add_messaging_contact,
+    manage_whitelist,
+    send_message,
+    get_last_message
+)
 
 # Central tool handler registry
 TOOL_HANDLERS = {
@@ -28,10 +39,10 @@ TOOL_HANDLERS = {
     "get_clipboard": get_clipboard,
     "set_clipboard": set_clipboard,
     "get_active_window": get_active_window,
-    
+
     # Web tools
     "scrape_webpage": scrape_webpage,
-    
+
     # Spotify tools
     "spotify_play": spotify_play,
     "spotify_pause": spotify_pause,
@@ -43,7 +54,18 @@ TOOL_HANDLERS = {
     "spotify_repeat": spotify_repeat,
     "spotify_volume": spotify_volume,
     "spotify_like_current": spotify_like_current,
-    "spotify_unlike_current": spotify_unlike_current
+    "spotify_unlike_current": spotify_unlike_current,
+
+    # Messaging tools
+    "setup_whatsapp": setup_whatsapp,
+    "setup_discord": setup_discord,
+    "start_messaging": start_messaging,
+    "stop_messaging": stop_messaging,
+    "messaging_status": messaging_status,
+    "add_messaging_contact": add_messaging_contact,
+    "manage_whitelist": manage_whitelist,
+    "send_message": send_message,
+    "get_last_message": get_last_message
 }
 
 

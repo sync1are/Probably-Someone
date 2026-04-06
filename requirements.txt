@@ -3,6 +3,12 @@ ollama==0.4.4
 openai==1.12.0
 python-dotenv==1.0.1
 numpy==1.26.4
+requests==2.31.0
+
+# Messaging (Discord/WhatsApp)
+flask==3.0.0
+discord.py-self==2.0.0
+asyncio
 
 # Audio and TTS
 sounddevice==0.4.7

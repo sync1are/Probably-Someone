@@ -32,6 +32,14 @@ ENV/
 env/
 .venv
 
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# WhatsApp session data
+messaging/whatsapp_bridge/.wwebjs_auth/
+messaging/whatsapp_bridge/.wwebjs_cache/
+
 # PyCharm
 .idea/
 
