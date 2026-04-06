@@ -45,7 +45,9 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     conversation_history.append(message)
     
     # Tools that should always get direct responses (no LLM needed)
-    direct_response_tools = ['spotify_pause', 'spotify_skip_next', 'spotify_skip_previous']
+    direct_response_tools = ['spotify_pause', 'spotify_skip_next', 'spotify_skip_previous', 
+                             'spotify_shuffle', 'spotify_repeat', 'spotify_volume',
+                             'spotify_like_current', 'spotify_unlike_current']
     
     # Tools that need LLM for natural language responses
     llm_response_tools = ['spotify_play', 'spotify_add_to_queue', 'spotify_current_track']
@@ -174,7 +176,10 @@ def main():
             
             if not user_input:
                 continue
-            
+
+            # Interrupt any currently playing audio when user sends a new message
+            audio_engine.interrupt()
+
             # Add user message
             conversation_history.append({
                 'role': 'user',

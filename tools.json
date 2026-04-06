@@ -4,16 +4,10 @@
       "type": "function",
       "function": {
         "name": "take_screenshot",
-        "description": "Captures a screenshot of the entire screen or active window. Use this when the user asks what's on their screen, to see their screen, or to help with something visible.",
+        "description": "Captures a screenshot of the entire screen. Use this when the user asks what's on their screen, to see their screen, or to help with something visible.",
         "parameters": {
           "type": "object",
-          "properties": {
-            "mode": {
-              "type": "string",
-              "enum": ["full", "active_window"],
-              "description": "Whether to capture the full screen or just the active window. Default is 'full'."
-            }
-          },
+          "properties": {},
           "required": []
         }
       }
@@ -21,169 +15,58 @@
     {
       "type": "function",
       "function": {
-        "name": "search_web",
-        "description": "Searches the web for information. Use this when the user asks about current events, facts you don't know, or anything requiring up-to-date information.",
+        "name": "get_clipboard",
+        "description": "Get the current clipboard content. Use when user says 'what did I copy', 'what's in my clipboard', or 'summarize what I copied'.",
         "parameters": {
           "type": "object",
-          "properties": {
-            "query": {
-              "type": "string",
-              "description": "The search query to look up"
-            }
-          },
-          "required": ["query"]
+          "properties": {},
+          "required": []
         }
       }
     },
     {
       "type": "function",
       "function": {
-        "name": "open_application",
-        "description": "Opens an application or program on the computer. Use this when the user asks to open, launch, or start an application.",
+        "name": "set_clipboard",
+        "description": "Copy text to the clipboard. Use when user says 'copy this', 'save to clipboard'.",
         "parameters": {
           "type": "object",
           "properties": {
-            "app_name": {
+            "text": {
               "type": "string",
-              "description": "Name of the application to open (e.g., 'notepad', 'chrome', 'calculator')"
+              "description": "The text to copy to clipboard"
             }
           },
-          "required": ["app_name"]
+          "required": ["text"]
         }
       }
     },
     {
       "type": "function",
       "function": {
-        "name": "read_file",
-        "description": "Reads the contents of a file from the file system. Use this when the user asks about file contents or wants to know what's in a file.",
+        "name": "get_active_window",
+        "description": "Get the title and app name of the currently active window. Use when user asks about their current app.",
         "parameters": {
           "type": "object",
-          "properties": {
-            "file_path": {
-              "type": "string",
-              "description": "The full path to the file to read"
-            }
-          },
-          "required": ["file_path"]
+          "properties": {},
+          "required": []
         }
       }
     },
     {
       "type": "function",
       "function": {
-        "name": "write_file",
-        "description": "Writes or creates a file with the specified content. Use this when the user asks to create a file, save something, or write content to disk.",
+        "name": "scrape_webpage",
+        "description": "Extract text content from a webpage URL. Use when user wants to summarize an article or read web content.",
         "parameters": {
           "type": "object",
           "properties": {
-            "file_path": {
+            "url": {
               "type": "string",
-              "description": "The full path where the file should be saved"
-            },
-            "content": {
-              "type": "string",
-              "description": "The content to write to the file"
+              "description": "The URL of the webpage to scrape"
             }
           },
-          "required": ["file_path", "content"]
-        }
-      }
-    },
-    {
-      "type": "function",
-      "function": {
-        "name": "execute_command",
-        "description": "Executes a system command or shell command. Use this when the user asks to run a command, execute something in the terminal, or perform system operations.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "command": {
-              "type": "string",
-              "description": "The command to execute"
-            }
-          },
-          "required": ["command"]
-        }
-      }
-    },
-    {
-      "type": "function",
-      "function": {
-        "name": "get_system_info",
-        "description": "Gets system information like CPU usage, memory usage, disk space, etc. Use this when the user asks about computer performance or system status.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "info_type": {
-              "type": "string",
-              "enum": ["cpu", "memory", "disk", "all"],
-              "description": "Type of system information to retrieve"
-            }
-          },
-          "required": ["info_type"]
-        }
-      }
-    },
-    {
-      "type": "function",
-      "function": {
-        "name": "set_reminder",
-        "description": "Sets a reminder or alarm for a specific time. Use this when the user asks to remind them about something or set an alarm.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "message": {
-              "type": "string",
-              "description": "The reminder message"
-            },
-            "time": {
-              "type": "string",
-              "description": "When to trigger the reminder (e.g., '5 minutes', '2 hours', '3:30 PM')"
-            }
-          },
-          "required": ["message", "time"]
-        }
-      }
-    },
-    {
-      "type": "function",
-      "function": {
-        "name": "get_weather",
-        "description": "Gets current weather information for a location. Use this when the user asks about weather conditions.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "location": {
-              "type": "string",
-              "description": "City name or location to get weather for"
-            }
-          },
-          "required": ["location"]
-        }
-      }
-    },
-    {
-      "type": "function",
-      "function": {
-        "name": "control_volume",
-        "description": "Controls system volume. Use this when the user asks to change volume, mute, or unmute.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "action": {
-              "type": "string",
-              "enum": ["set", "increase", "decrease", "mute", "unmute"],
-              "description": "Action to perform on volume"
-            },
-            "value": {
-              "type": "integer",
-              "description": "Volume level (0-100) when action is 'set', or amount to increase/decrease by",
-              "minimum": 0,
-              "maximum": 100
-            }
-          },
-          "required": ["action"]
+          "required": ["url"]
         }
       }
     },
@@ -191,13 +74,18 @@
       "type": "function",
       "function": {
         "name": "spotify_play",
-        "description": "Play a specific song, artist, or playlist on Spotify, or resume current playback. Use this when user asks to play music, resume playback, or start a specific song.",
+        "description": "Play a song, artist, playlist, or album on Spotify. Use when user asks to play music.",
         "parameters": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "Search query for the track, artist, or playlist to play. If not provided, resumes current playback."
+              "description": "Search query for content to play"
+            },
+            "content_type": {
+              "type": "string",
+              "enum": ["track", "playlist", "album", "artist"],
+              "description": "Type of content"
             }
           },
           "required": []
@@ -208,7 +96,7 @@
       "type": "function",
       "function": {
         "name": "spotify_pause",
-        "description": "Pause the current Spotify playback. Use this when user asks to pause, stop, or halt music.",
+        "description": "Pause Spotify playback.",
         "parameters": {
           "type": "object",
           "properties": {},
@@ -220,7 +108,7 @@
       "type": "function",
       "function": {
         "name": "spotify_skip_next",
-        "description": "Skip to the next track in Spotify queue. Use this when user asks to skip, next track, or play the next song.",
+        "description": "Skip to next track.",
         "parameters": {
           "type": "object",
           "properties": {},
@@ -232,7 +120,7 @@
       "type": "function",
       "function": {
         "name": "spotify_skip_previous",
-        "description": "Go back to the previous track on Spotify. Use this when user asks to go back, previous track, or replay last song.",
+        "description": "Go back to previous track.",
         "parameters": {
           "type": "object",
           "properties": {},
@@ -244,13 +132,13 @@
       "type": "function",
       "function": {
         "name": "spotify_add_to_queue",
-        "description": "Search for a song and add it to the Spotify playback queue. Use this when user asks to queue a song or add to queue.",
+        "description": "Add a song to queue.",
         "parameters": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "Search query for the track to add to queue"
+              "description": "Track to add"
             }
           },
           "required": ["query"]
@@ -261,7 +149,83 @@
       "type": "function",
       "function": {
         "name": "spotify_current_track",
-        "description": "Get information about the currently playing track on Spotify. Use this when user asks what's playing, current song, or now playing.",
+        "description": "Get currently playing track info.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_shuffle",
+        "description": "Enable or disable shuffle.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "boolean",
+              "description": "True for on, False for off"
+            }
+          },
+          "required": ["state"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_repeat",
+        "description": "Set repeat mode.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": ["track", "context", "off"]
+            }
+          },
+          "required": ["state"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_volume",
+        "description": "Set volume level.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "volume_percent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": ["volume_percent"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_like_current",
+        "description": "Like current song.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "spotify_unlike_current",
+        "description": "Unlike current song.",
         "parameters": {
           "type": "object",
           "properties": {},

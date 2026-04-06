@@ -4,7 +4,6 @@ import re
 import threading
 import queue
 import sounddevice as sd
-from kokoro import KPipeline
 from src.config import TTS_VOICE, TTS_SPEED, TTS_SAMPLE_RATE, AUDIO_QUEUE_SIZE, TTS_BUFFER_THRESHOLD
 
 
@@ -29,6 +28,10 @@ class AudioEngine:
         """Initialize TTS pipeline in background thread."""
         try:
             print("🔊 Loading TTS engine in background...")
+
+            # Lazy import to avoid blocking main thread startup
+            from kokoro import KPipeline
+
             self.pipeline = KPipeline(lang_code='a')
             # Pre-warm
             for _ in self.pipeline("Ready", voice=TTS_VOICE, speed=TTS_SPEED):
@@ -99,10 +102,30 @@ class AudioEngine:
         while not self.audio_queue.empty() or not self.text_queue.empty():
             sd.sleep(50)
         sd.sleep(200)
-    
+
+    def interrupt(self):
+        """Stop current playback and clear all pending audio/text."""
+        # Stop currently playing audio immediately
+        sd.stop()
+
+        # Clear the text queue
+        while not self.text_queue.empty():
+            try:
+                self.text_queue.get_nowait()
+            except queue.Empty:
+                break
+
+        # Clear the audio queue
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+            except queue.Empty:
+                break
+
     def shutdown(self):
         """Shutdown audio threads."""
         self.stop_signal.set()
+        self.interrupt()
 
 
 class StreamingTextProcessor:

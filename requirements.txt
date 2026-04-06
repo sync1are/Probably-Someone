@@ -14,6 +14,13 @@ Pillow==10.3.0
 # Spotify integration
 spotipy==2.23.0
 
+# Context tools - clipboard, window detection, web scraping
+pyperclip==1.8.2
+pygetwindow==0.0.9
+requests==2.31.0
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
 # For PyTorch with CUDA 12.1 support, install separately with:
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
