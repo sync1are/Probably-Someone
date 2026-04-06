@@ -18,19 +18,35 @@ def get_spotify_client():
 def spotify_play(query=None, content_type="track"):
     """
     Play a specific song, artist, playlist, or album, or resume playback.
-    
+
     Args:
         query (str, optional): Search query for a track/playlist/album. If None, resumes current playback.
         content_type (str): Type of content to search for: "track", "playlist", "album", "artist"
-    
+
     Returns:
         dict: Success status and message or error.
     """
     sp = get_spotify_client()
     try:
         if query:
+            # Parse query to improve search accuracy
+            # Look for patterns like "SONG by ARTIST" or "SONG from ARTIST"
+            search_query = query
+            if content_type == "track":
+                # Try to extract track and artist from natural language
+                by_patterns = [' by ', ' from ', ' - ']
+                for pattern in by_patterns:
+                    if pattern in query.lower():
+                        parts = query.lower().split(pattern, 1)
+                        if len(parts) == 2:
+                            track_name = parts[0].strip()
+                            artist_name = parts[1].strip()
+                            # Use Spotify's advanced search syntax
+                            search_query = f"track:{track_name} artist:{artist_name}"
+                            break
+
             # Search for the content
-            results = sp.search(q=query, limit=1, type=content_type)
+            results = sp.search(q=search_query, limit=1, type=content_type)
             
             if content_type == 'track' and results['tracks']['items']:
                 track = results['tracks']['items'][0]

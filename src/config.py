@@ -18,7 +18,7 @@ SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI', 'http://127.0.0.1:8888/callback')
 
 # Model Configuration
-DEFAULT_MODEL = 'gemma4:e2b'
+DEFAULT_MODEL = 'qwen3.5:2b'
 VISION_MODEL = 'gemma4:31b-cloud'
 
 # TTS Configuration
