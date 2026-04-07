@@ -55,6 +55,18 @@ python start_messaging.py
 - **"Help me with this program"** - Context-aware assistance
 - AI automatically knows your context (VS Code, Chrome, Excel, etc.)
 
+### Window & App Control
+- **"Open File Explorer"** - Launch local applications by name
+- **"Go to YouTube"** - Open specific websites
+- **"Minimize Chrome" / "Maximize VS Code"** - Control window state
+- **"Switch to Discord"** - Bring specific apps to the foreground
+- **"Show my desktop"** - Minimize everything
+
+### System & Audio Control
+- **"Set volume to 50%" / "Mute"** - Control master volume
+- **"Set brightness to 20%"** - Control monitor brightness
+- **"Pause the video"** - Smart routing pauses system media if Spotify isn't playing
+
 ### Web Scraping
 - **"Summarize https://example.com"** - Extract and analyze web content
 - **"What does this article say?"** - Read any webpage
@@ -79,6 +91,10 @@ D:\VERISON 3\
 │   │   ├── spotify_tools.py   # Spotify integration
 │   │   ├── web_tools.py       # Web scraping
 │   │   ├── gmail_tools.py     # Gmail API integration
+│   │   ├── launcher_tools.py  # App/website opening
+│   │   ├── window_tools.py    # Minimize/maximize/switch
+│   │   ├── audio_tools.py     # Volume & media control
+│   │   ├── display_tools.py   # Screen brightness
 │   │   └── messaging_tools.py # Messaging setup/control
 │   ├── messaging/             # Messaging backend
 │   │   ├── controller.py      # Main orchestrator
@@ -171,6 +187,13 @@ python app.py
   - "Read me the email from John"
   - "Send a message to Mom on WhatsApp"
   - "Start auto-reply"
+
+- **System Control:**
+  - "Set volume to 50%"
+  - "Dim my screen by 20%"
+  - "Minimize Chrome"
+  - "Open my downloads folder"
+  - "Switch to VS Code"
 
 - **Screenshot:**
   - "What's on my screen?"

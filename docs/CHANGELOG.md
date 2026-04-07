@@ -8,6 +8,12 @@
 - **Directory restructure** - Organized entire codebase into logical folders (`src/`, `messaging/`, `docs/`, `tests/`).
 - **Clean Root** - Moved all scattered test reports and messaging apps out of the main directory.
 
+### 🖥️ Foundation Features (Phase 1 Complete)
+- **Window Management:** Added commands to minimize, maximize, close, and switch specific windows.
+- **App Launcher:** Can now launch apps (Chrome, VS Code, Discord) or open common websites by name.
+- **System Audio Control:** Mute/unmute, set master volume percentage.
+- **Smart Media Routing:** Added intelligent conflict resolution. E.g., saying "Next track" checks if Spotify is playing first; if not, it falls back to system media keys (controlling YouTube, VLC, etc.).
+
 ### 📧 Gmail Features Added
 - Added `gmail_tools.py` with secure local auth flow
 - Requested Read-Only scopes for maximum privacy/security

@@ -196,16 +196,35 @@ class StreamingTextProcessor:
         """Process a text chunk from streaming response."""
         self.text_buffer += chunk
         self.char_count += len(chunk)
-        
-        sentences = re.split(r'([.!?:,]\s+)', self.text_buffer)
-        
+
+        # Split on sentence boundaries (.!?: or newlines)
+        # Avoid splitting on commas alone as it makes speech too choppy
+        # Avoid splitting on numbered list dots (e.g. "1.", "2.") by checking lookbehind
+        split_pattern = r'(?<!\b\d)([.!?:\n]+[\s]+)'
+
+        sentences = re.split(split_pattern, self.text_buffer)
+
+        # We process if we have a full sentence or if buffer gets too large
         if len(sentences) > 2 or self.char_count > TTS_BUFFER_THRESHOLD:
-            complete_text = ''.join(sentences[:-1]) if len(sentences) > 2 else self.text_buffer
-            self.text_buffer = sentences[-1] if len(sentences) > 2 else ""
+            if len(sentences) > 2:
+                # Recombine sentence with its trailing punctuation
+                complete_text = ''.join(sentences[:-1])
+                self.text_buffer = sentences[-1]
+            else:
+                complete_text = self.text_buffer
+                self.text_buffer = ""
+
             self.char_count = len(self.text_buffer)
-            
-            if complete_text.strip():
-                self.audio_engine.queue_text(complete_text)
+
+            # Clean up formatting artifacts that confuse Kokoro before queueing
+            cleaned_text = complete_text.strip()
+            # Remove Markdown bold/italic asterisks, list dashes, and backticks
+            cleaned_text = re.sub(r'[*_`~]', '', cleaned_text)
+            # Remove hash symbols from headers
+            cleaned_text = re.sub(r'#+\s*', '', cleaned_text)
+
+            if cleaned_text:
+                self.audio_engine.queue_text(cleaned_text)
     
     def flush(self):
         """Flush remaining buffered text."""

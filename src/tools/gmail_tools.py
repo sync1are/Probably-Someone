@@ -189,7 +189,9 @@ def get_important_unread_emails(max_results: int = 5) -> Dict[str, Any]:
             "data": {
                 "emails": email_data,
                 "count": len(email_data)
-            }
+            },
+            "summary": f"You have {len(email_data)} important unread emails." +
+                      (" The latest is from " + email_data[0]["sender"] + " about '" + email_data[0]["subject"] + "'." if email_data else "")
         }
 
     except HttpError as error:

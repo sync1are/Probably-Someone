@@ -339,7 +339,7 @@ def add_messaging_contact(platform, contact):
 
         # Otherwise, add directly to JSON file
         import json
-        whitelist_file = Path(__file__).parent.parent.parent / "messaging_whitelist.json"
+        whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
 
         with open(whitelist_file, 'r') as f:
             whitelist = json.load(f)
@@ -611,7 +611,16 @@ def manage_whitelist(action, platform=None, contact=None):
     """
     try:
         import json
-        whitelist_file = Path(__file__).parent.parent.parent / "messaging_whitelist.json"
+        whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
+
+        # Initialize default if it doesn't exist
+        if not whitelist_file.exists():
+            default = {
+                "discord": {"users": [], "channels": []},
+                "whatsapp": {"contacts": []}
+            }
+            with open(whitelist_file, 'w') as f:
+                json.dump(default, f, indent=2)
 
         # Load current whitelist
         with open(whitelist_file, 'r') as f:
@@ -668,6 +677,10 @@ def manage_whitelist(action, platform=None, contact=None):
 
             # Remove contact
             removed = False
+
+            # Using updated path
+            whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
+
             if platform == "whatsapp":
                 if contact in whitelist["whatsapp"]["contacts"]:
                     whitelist["whatsapp"]["contacts"].remove(contact)

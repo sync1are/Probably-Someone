@@ -3,6 +3,223 @@
     {
       "type": "function",
       "function": {
+        "name": "set_system_volume",
+        "description": "Sets the system audio master volume. Use when user asks 'set volume to 50%', 'volume max', etc.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "integer",
+              "description": "Volume percentage from 0 to 100"
+            }
+          },
+          "required": ["level"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "adjust_system_volume",
+        "description": "Increases or decreases system audio master volume by a relative amount. Use when user asks 'volume up', 'turn it down', etc.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "description": "Amount to adjust by (e.g. 10 or 20)",
+              "default": 10
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["up", "down"],
+              "description": "Whether to increase or decrease volume"
+            }
+          },
+          "required": ["direction"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "toggle_system_mute",
+        "description": "Mutes, unmutes, or toggles system audio.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": ["mute", "unmute", "toggle"],
+              "description": "The desired mute state",
+              "default": "toggle"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "set_system_brightness",
+        "description": "Sets the system screen brightness. Use when user asks 'set brightness to 50%', 'screen is too bright', etc.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "integer",
+              "description": "Brightness percentage from 0 to 100"
+            }
+          },
+          "required": ["level"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "adjust_system_brightness",
+        "description": "Increases or decreases screen brightness by a relative amount. Use when user asks 'brightness up', 'dim the screen', etc.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "description": "Amount to adjust by (e.g. 10 or 20)",
+              "default": 10
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["up", "down"],
+              "description": "Whether to increase or decrease brightness"
+            }
+          },
+          "required": ["direction"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "smart_media_control",
+        "description": "Intelligently routes media commands like play, pause, next, or previous. It checks if Spotify is playing first; if not, it falls back to system media keys (which controls YouTube, Video players, etc.). Use this for ANY general media command (e.g. 'pause the video', 'next track', 'play').",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["play", "pause", "next", "previous"],
+              "description": "The media action to perform"
+            },
+            "target": {
+              "type": "string",
+              "description": "Optional: Specific app to target (e.g. 'spotify', 'youtube')",
+              "default": null
+            }
+          },
+          "required": ["action"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "open_application",
+        "description": "Opens an application or common website by name. Examples: 'open Chrome', 'launch VS Code', 'start Discord', 'open settings'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "app_name": {
+              "type": "string",
+              "description": "The name of the application or website to launch"
+            }
+          },
+          "required": ["app_name"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "minimize_window",
+        "description": "Minimizes a specific window by its title, or the currently active window if no title is given.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Optional title of the window to minimize",
+              "default": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "maximize_window",
+        "description": "Maximizes a specific window by its title, or the currently active window if no title is given.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Optional title of the window to maximize",
+              "default": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "close_window",
+        "description": "Closes a specific window by its title, or the currently active window if no title is given.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Optional title of the window to close",
+              "default": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "switch_to_window",
+        "description": "Brings a specific window to the foreground and focuses it. Examples: 'switch to VS Code', 'go to Chrome'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Title or partial title of the window to switch to"
+            }
+          },
+          "required": ["title"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "show_desktop",
+        "description": "Minimizes all windows to show the desktop. Example: 'show desktop', 'hide all windows'.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
         "name": "get_important_unread_emails",
         "description": "Checks the user's Gmail inbox for new, important unread emails. Uses Gmail's AI importance markers to filter out newsletters and spam. Use when user asks 'Do I have any important emails?', 'Check my mail', or 'Any new messages in my inbox?'.",
         "parameters": {

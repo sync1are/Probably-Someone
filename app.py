@@ -45,18 +45,18 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     conversation_history.append(message)
     
     # Tools that should always get direct responses (no LLM needed)
-    direct_response_tools = ['spotify_pause', 'spotify_skip_next', 'spotify_skip_previous', 
+    direct_response_tools = ['spotify_pause', 'spotify_skip_next', 'spotify_skip_previous',
                              'spotify_shuffle', 'spotify_repeat', 'spotify_volume',
-                             'spotify_like_current', 'spotify_unlike_current']
+                             'spotify_like_current', 'spotify_unlike_current', 'set_system_volume',
+                             'adjust_system_volume', 'toggle_system_mute', 'smart_media_control',
+                             'set_system_brightness', 'adjust_system_brightness', 'minimize_window',
+                             'maximize_window', 'close_window', 'switch_to_window', 'show_desktop', 'open_application']
     
     # Tools that need LLM for natural language responses
-    llm_response_tools = ['spotify_play', 'spotify_add_to_queue', 'spotify_current_track']
-    
-    all_spotify = all(
-        tool_call['function']['name'].startswith('spotify_') 
-        for tool_call in message['tool_calls']
-    )
-    
+    llm_response_tools = ['spotify_play', 'spotify_add_to_queue', 'spotify_current_track',
+                          'get_important_unread_emails', 'read_specific_email']
+
+    # We want a direct response ONLY if all tools are in the direct list
     all_direct = all(
         tool_call['function']['name'] in direct_response_tools
         for tool_call in message['tool_calls']
@@ -80,7 +80,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                 needs_llm = True
             
             # Check if this can be direct response
-            if tool_name in direct_response_tools and all_spotify:
+            if tool_name in direct_response_tools and all_direct:
                 # Direct response without LLM
                 response_text = tool_result.get('message', 'Done')
                 direct_responses.append(response_text)
@@ -117,27 +117,18 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                     'content': json.dumps(tool_result)
                 })
         else:
-            print(f"  ✗ {tool_name} failed: {tool_result.get('error')}")
-            error_msg = f"Error: {tool_result.get('error')}"
-            
-            if tool_name in direct_response_tools and all_direct:
-                direct_responses.append(error_msg)
-                conversation_history.append({
-                    'role': 'tool',
-                    'content': json.dumps(tool_result)
-                })
-                conversation_history.append({
-                    'role': 'assistant',
-                    'content': error_msg
-                })
-            else:
-                needs_llm = True
-                conversation_history.append({
-                    'role': 'tool',
-                    'content': json.dumps(tool_result)
-                })
+            # Important: Don't let it crash if 'error' key doesn't exist
+            err_txt = tool_result.get('error') or tool_result.get('message') or "Unknown error"
+            print(f"  ✗ {tool_name} failed: {err_txt}")
+
+            # We always want the LLM to explain why it failed, instead of just printing a python error directly
+            needs_llm = True
+            conversation_history.append({
+                'role': 'tool',
+                'content': json.dumps(tool_result)
+            })
     
-    # If all were direct response tools (pause/skip/previous), return direct responses
+    # If all were direct response tools (pause/skip/previous) and NONE failed, return direct responses
     if all_direct and direct_responses and not needs_llm:
         return None, '\n'.join(direct_responses)
     

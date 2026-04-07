@@ -11,8 +11,13 @@ from typing import List, Dict, Set
 class WhitelistManager:
     """Manages whitelisted contacts for messaging platforms."""
 
-    def __init__(self, config_file: str = "messaging_whitelist.json"):
-        self.config_file = config_file
+    def __init__(self, config_file: str = None):
+        if config_file is None:
+            # Point to the correct new location in the messaging folder
+            self.config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "messaging", "messaging_whitelist.json")
+        else:
+            self.config_file = config_file
+
         self.whitelist = self._load_whitelist()
 
     def _load_whitelist(self) -> Dict:

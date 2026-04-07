@@ -7,6 +7,17 @@ from src.tools.system_tools import (
     get_active_window
 )
 from src.tools.web_tools import scrape_webpage
+from src.tools.launcher_tools import open_application
+from src.tools.display_tools import (
+    set_system_brightness,
+    adjust_system_brightness
+)
+from src.tools.audio_tools import (
+    set_system_volume,
+    adjust_system_volume,
+    toggle_system_mute,
+    smart_media_control
+)
 from src.tools.spotify_tools import (
     spotify_play,
     spotify_pause,
@@ -19,6 +30,13 @@ from src.tools.spotify_tools import (
     spotify_volume,
     spotify_like_current,
     spotify_unlike_current
+)
+from src.tools.window_tools import (
+    minimize_window,
+    maximize_window,
+    close_window,
+    switch_to_window,
+    show_desktop
 )
 from src.tools.messaging_tools import (
     setup_whatsapp,
@@ -50,6 +68,22 @@ TOOL_HANDLERS = {
 
     # Web tools
     "scrape_webpage": scrape_webpage,
+
+    # Launcher & Window tools
+    "open_application": open_application,
+    "minimize_window": minimize_window,
+    "maximize_window": maximize_window,
+    "close_window": close_window,
+    "switch_to_window": switch_to_window,
+    "show_desktop": show_desktop,
+
+    # Audio/Display tools
+    "set_system_brightness": set_system_brightness,
+    "adjust_system_brightness": adjust_system_brightness,
+    "set_system_volume": set_system_volume,
+    "adjust_system_volume": adjust_system_volume,
+    "toggle_system_mute": toggle_system_mute,
+    "smart_media_control": smart_media_control,
 
     # Spotify tools
     "spotify_play": spotify_play,
