@@ -204,16 +204,14 @@ class StreamingTextProcessor:
 
         sentences = re.split(split_pattern, self.text_buffer)
 
-        # We process if we have a full sentence or if buffer gets too large
-        if len(sentences) > 2 or self.char_count > TTS_BUFFER_THRESHOLD:
-            if len(sentences) > 2:
-                # Recombine sentence with its trailing punctuation
-                complete_text = ''.join(sentences[:-1])
-                self.text_buffer = sentences[-1]
-            else:
-                complete_text = self.text_buffer
-                self.text_buffer = ""
+        # We process ONLY if we have a full sentence (length > 2 because re.split keeps the delimiter)
+        # We REMOVED the char_count threshold to prevent random mid-sentence cutoffs
+        while len(sentences) > 2:
+            # Recombine the first sentence with its trailing punctuation
+            complete_text = sentences[0] + sentences[1]
 
+            # Keep the rest in the buffer
+            self.text_buffer = ''.join(sentences[2:])
             self.char_count = len(self.text_buffer)
 
             # Clean up formatting artifacts that confuse Kokoro before queueing
@@ -225,10 +223,17 @@ class StreamingTextProcessor:
 
             if cleaned_text:
                 self.audio_engine.queue_text(cleaned_text)
+
+            # Re-split the remaining buffer to see if there are more complete sentences waiting
+            sentences = re.split(split_pattern, self.text_buffer)
     
     def flush(self):
         """Flush remaining buffered text."""
-        if self.text_buffer.strip():
-            self.audio_engine.queue_text(self.text_buffer)
+        cleaned_text = self.text_buffer.strip()
+        cleaned_text = re.sub(r'[*_`~]', '', cleaned_text)
+        cleaned_text = re.sub(r'#+\s*', '', cleaned_text)
+
+        if cleaned_text:
+            self.audio_engine.queue_text(cleaned_text)
         self.text_buffer = ""
         self.char_count = 0

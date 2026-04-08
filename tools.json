@@ -78,6 +78,106 @@
     {
       "type": "function",
       "function": {
+        "name": "write_file",
+        "description": "Create a new text or JSON file, or overwrite an existing one. Use when user says 'write this down in notes.txt', 'save this JSON data', 'create a file called...'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "Name of the file (e.g. notes.txt, data.json)"
+            },
+            "content": {
+              "type": "string",
+              "description": "The text or JSON content to write to the file"
+            },
+            "as_json": {
+              "type": "boolean",
+              "description": "If true, attempts to parse and save the content as a perfectly formatted JSON file. Default is false."
+            }
+          },
+          "required": ["filename", "content"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "append_to_file",
+        "description": "Add new text to the end of an existing file. Use when user says 'add this to my notes', 'append to grocery.txt'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "Name of the file to append to"
+            },
+            "content": {
+              "type": "string",
+              "description": "The text to add"
+            }
+          },
+          "required": ["filename", "content"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Read the contents of a saved file. Use when user says 'what did I write in notes.txt', 'read data.json'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "Name of the file to read"
+            }
+          },
+          "required": ["filename"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "list_files",
+        "description": "List all files currently saved by the assistant. Use when user asks 'what files do you have saved?' or 'list my documents'.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "read_pdf",
+        "description": "Extracts text from a PDF file. Intelligently searches the user's ARIA_Files and Downloads folders automatically. Use when user asks to 'read this PDF', 'summarize the document', or 'extract text from...'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "Name of the PDF file (e.g. math_homework.pdf or just math_homework)"
+            },
+            "page_start": {
+              "type": "integer",
+              "description": "The first page to read (1-indexed). Default is 1.",
+              "default": 1
+            },
+            "page_end": {
+              "type": "integer",
+              "description": "The last page to read (inclusive). If omitted, reads to the end."
+            }
+          },
+          "required": ["filename"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
         "name": "adjust_system_brightness",
         "description": "Increases or decreases screen brightness by a relative amount. Use when user asks 'brightness up', 'dim the screen', etc.",
         "parameters": {
@@ -95,6 +195,28 @@
             }
           },
           "required": ["direction"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_latest_news",
+        "description": "Fetches the latest news headlines from Google News. Use when the user asks 'What's the latest news?', 'Tell me the news about AI', or 'Any news on Tesla?'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "Optional specific topic (e.g. 'finance', 'technology', 'sports'). If omitted, fetches general top headlines.",
+              "default": null
+            },
+            "count": {
+              "type": "integer",
+              "description": "How many headlines to read out (default is 5).",
+              "default": 5
+            }
+          }
         }
       }
     },

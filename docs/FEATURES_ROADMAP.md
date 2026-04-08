@@ -64,7 +64,7 @@ Comprehensive list of system-level features to be implemented one by one.
 - [x] Window Management ✅
 - [x] App Launcher ✅
 - [x] System Audio Control ✅
-- [ ] File Operations (Basic)
+- [x] File Operations (Basic) ✅
 
 ### Priority 2: Productivity
 - [ ] Reminders & Timers
@@ -534,9 +534,9 @@ Track and visualize productivity metrics.
 1. Window Management ✅ Completed
 2. App Launcher ✅ Completed
 3. System Audio Control ✅ Completed
+4. File Operations ✅ Completed
 
 ### Phase 2: Productivity (Week 3-4)
-4. File Operations
 5. Reminders & Timers
 6. Task Management
 

@@ -38,6 +38,13 @@ from src.tools.window_tools import (
     switch_to_window,
     show_desktop
 )
+from src.tools.file_tools import (
+    write_file,
+    append_to_file,
+    read_file,
+    list_files,
+    read_pdf
+)
 from src.tools.messaging_tools import (
     setup_whatsapp,
     setup_discord,
@@ -54,6 +61,8 @@ from src.tools.gmail_tools import (
     read_specific_email
 )
 
+from src.tools.news_tools import get_latest_news
+
 # Central tool handler registry
 TOOL_HANDLERS = {
     # Gmail tools
@@ -66,8 +75,16 @@ TOOL_HANDLERS = {
     "set_clipboard": set_clipboard,
     "get_active_window": get_active_window,
 
-    # Web tools
+    # Web/News tools
     "scrape_webpage": scrape_webpage,
+    "get_latest_news": get_latest_news,
+
+    # File tools
+    "write_file": write_file,
+    "append_to_file": append_to_file,
+    "read_file": read_file,
+    "list_files": list_files,
+    "read_pdf": read_pdf,
 
     # Launcher & Window tools
     "open_application": open_application,

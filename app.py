@@ -17,23 +17,34 @@ def load_tools():
         return tools_data['tools']
 
 
-def stream_response(response, audio_engine):
+def stream_response(response, audio_engine, is_code=False):
     """Stream LLM response and handle TTS."""
     full_response = ""
     processor = StreamingTextProcessor(audio_engine)
-    
-    print("🤖 AI:", end=" ", flush=True)
-    
+
+    # If it's generating code/file content, show a different indicator
+    if is_code:
+        print("🤖 AI: ", end="", flush=True)
+    else:
+        # Flag to clear the "Generating text..." message on first chunk
+        first_chunk = True
+
     for part in response:
         chunk = part['message']['content']
+
+        if not is_code and first_chunk:
+            # We use \r to overwrite the "Generating text..." line, clearing the whole line
+            print("\r\033[K🤖 AI: ", end="", flush=True)
+            first_chunk = False
+
         print(chunk, end='', flush=True)
-        
+
         full_response += chunk
         processor.process_chunk(chunk)
-    
+
     print("\n")
     processor.flush()
-    
+
     return full_response
 
 
@@ -68,7 +79,24 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     for tool_call in message['tool_calls']:
         tool_name = tool_call['function']['name']
         tool_args = tool_call['function']['arguments']
-        
+
+        # Look in the conversation history for any previously generated file paths
+        # This handles cross-turn dependencies (ReAct loop) as well as same-turn dependencies
+        if isinstance(tool_args, dict):
+            for prev_msg in reversed(conversation_history):
+                if prev_msg.get('role') == 'tool':
+                    try:
+                        prev_res = json.loads(prev_msg.get('content', '{}'))
+                        if prev_res.get('success') and 'filepath' in prev_res.get('data', {}):
+                            prev_path = prev_res['data']['filepath']
+                            # Look for the filename inside the arguments and replace it with the path
+                            for key, val in tool_args.items():
+                                if isinstance(val, str) and val in prev_path:
+                                    # If the argument is just "index.html" but the full path is "C:\...\index.html", swap it!
+                                    tool_args[key] = prev_path
+                    except Exception:
+                        pass
+
         print(f"  → Calling {tool_name}...")
         tool_result = execute_tool(tool_name, tool_args)
         
@@ -130,20 +158,30 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     
     # If all were direct response tools (pause/skip/previous) and NONE failed, return direct responses
     if all_direct and direct_responses and not needs_llm:
-        return None, '\n'.join(direct_responses)
+        return None, '\n'.join(direct_responses), False
     
     # Otherwise, get final response from LLM for natural language
     # Check if this is a vision request (has images in conversation)
     has_images = any('images' in msg for msg in conversation_history if isinstance(msg, dict))
 
+    # Check if we were asked to write code/file
+    is_writing_code = any(
+        tool_call['function']['name'] == 'write_file'
+        for tool_call in message['tool_calls']
+    )
+
+    if is_writing_code:
+        print("\n⏳ Generating code and saving file...", end="\n", flush=True)
+    else:
+        print("\n⏳ Generating text...", end="", flush=True)
+
     final_response = llm_client.chat(
         model=DEFAULT_MODEL,
         messages=conversation_history,
-        stream=True,
-        think=has_images  # Enable thinking for vision analysis
+        stream=True
     )
-    
-    return final_response, None
+
+    return final_response, None, is_writing_code
 
 
 def main():
@@ -191,31 +229,53 @@ def main():
             
             message = response['message']
             
-            # Handle tool calls or direct response
-            if message.get('tool_calls'):
-                final_response, direct_output = process_tool_calls(
-                    message, 
-                    conversation_history, 
-                    llm_client, 
+            # Handle tool calls in a ReAct loop
+            loop_count = 0
+            max_loops = 5
+
+            while message.get('tool_calls') and loop_count < max_loops:
+                loop_count += 1
+
+                # Check if it's a direct Spotify/system command with no LLM needed
+                final_response, direct_output, is_writing = process_tool_calls(
+                    message,
+                    conversation_history,
+                    llm_client,
                     tools,
                     audio_engine
                 )
-                
+
                 if direct_output:
-                    # Direct Spotify response - no LLM needed
                     print(f"🤖 AI: {direct_output}\n")
                     audio_engine.queue_text(direct_output)
                     audio_engine.signal_done()
-                else:
-                    # Stream LLM response
-                    full_response = stream_response(final_response, audio_engine)
-                    conversation_history.append({
-                        'role': 'assistant',
-                        'content': full_response
-                    })
+                    break
+
+                # If we need an LLM response after the tool
+                full_response = stream_response(final_response, audio_engine, is_code=is_writing)
+                conversation_history.append({
+                    'role': 'assistant',
+                    'content': full_response
+                })
+
+                # Check if the LLM wants to call another tool based on the result
+                next_response = llm_client.chat(
+                    model=DEFAULT_MODEL,
+                    messages=conversation_history,
+                    tools=tools,
+                    stream=False
+                )
+                message = next_response['message']
+
+                if not message.get('tool_calls'):
                     audio_engine.signal_done()
-            else:
-                # Direct response, no tools
+                    break
+                else:
+                    print("\n  [Continuing workflow...]")
+
+            if not message.get('tool_calls') and loop_count == 0:
+                # Direct response, no tools used at all
+                print("\n⏳ Generating text...", end="", flush=True)
                 streamed = llm_client.chat(
                     model=DEFAULT_MODEL,
                     messages=conversation_history,

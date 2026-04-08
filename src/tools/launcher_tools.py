@@ -78,6 +78,25 @@ def open_application(app_name: str) -> Dict[str, Any]:
     app_lower = app_name.lower().strip()
 
     try:
+        # Check if it's an exact file or directory path that exists on the hard drive
+        if os.path.exists(app_name):
+            if os.name == 'nt':
+                # If it's a directory, use explorer. If it's a file (like index.html), use startfile
+                if os.path.isdir(app_name):
+                    subprocess.Popen(f'explorer.exe "{app_name}"', shell=True)
+                else:
+                    os.startfile(app_name)
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', app_name])
+            else:
+                subprocess.Popen(['xdg-open', app_name])
+
+            return {
+                "success": True,
+                "message": f"Successfully opened {os.path.basename(app_name)}.",
+                "data": {"app": app_name, "executable": app_name}
+            }
+
         # Check if it's a known website alias first
         if app_lower in COMMON_WEBSITES:
             url = COMMON_WEBSITES[app_lower]

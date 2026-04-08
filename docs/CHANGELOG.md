@@ -8,6 +8,14 @@
 - **Directory restructure** - Organized entire codebase into logical folders (`src/`, `messaging/`, `docs/`, `tests/`).
 - **Clean Root** - Moved all scattered test reports and messaging apps out of the main directory.
 
+### 📰 News & Information Added
+- **Live News Feeds:** Added the `get_latest_news` tool to fetch real-time headlines using Google News RSS feeds. No API keys required. You can ask for general news or specific topics like "What's the news on Tesla?"
+
+### 💻 File Operations Added
+- **Read/Write Files:** Added capability for ARIA to save, read, and append to `.txt` files on your hard drive.
+- **JSON Formatting:** Added specific support for creating well-formatted `.json` files.
+- **Safety First:** All files are automatically saved into a dedicated `Documents/ARIA_Files` folder to prevent accidental overwrites of system files.
+
 ### 🖥️ Foundation Features (Phase 1 Complete)
 - **Window Management:** Added commands to minimize, maximize, close, and switch specific windows.
 - **App Launcher:** Can now launch apps (Chrome, VS Code, Discord) or open common websites by name.

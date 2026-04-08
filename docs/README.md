@@ -67,6 +67,18 @@ python start_messaging.py
 - **"Set brightness to 20%"** - Control monitor brightness
 - **"Pause the video"** - Smart routing pauses system media if Spotify isn't playing
 
+### File Management & Multi-Step Workflows
+- **"Create a file called notes.txt"** - AI can save text files
+- **"Save this as data.json"** - Properly formats and saves JSON
+- **"Create an HTML file and open it"** - AI can chain tools to write a file and instantly launch it
+- **"Append this to grocery.txt"** - Add to existing files
+- **"What did I write in my notes?"** - AI can read your saved files
+- **"List my saved files"** - See what files are available
+
+### News & Information
+- **"What's the latest news?"** - Get top global headlines
+- **"Any news on AI?"** - Fetch headlines for specific topics
+
 ### Web Scraping
 - **"Summarize https://example.com"** - Extract and analyze web content
 - **"What does this article say?"** - Read any webpage
@@ -90,6 +102,7 @@ D:\VERISON 3\
 │   │   ├── system_tools.py    # Screenshot, clipboard, etc.
 │   │   ├── spotify_tools.py   # Spotify integration
 │   │   ├── web_tools.py       # Web scraping
+│   │   ├── news_tools.py      # Google News RSS integration
 │   │   ├── gmail_tools.py     # Gmail API integration
 │   │   ├── launcher_tools.py  # App/website opening
 │   │   ├── window_tools.py    # Minimize/maximize/switch
@@ -206,6 +219,7 @@ python app.py
 
 ## Architecture
 
+- **ReAct Tool Chaining** - ARIA can automatically call multiple tools sequentially in a single turn (e.g., generate a file, read its path, then automatically open it in your browser).
 - **Modular Design** - Clean separation of concerns
 - **Tool Registry Pattern** - Easy to add new capabilities
 - **Streaming TTS** - Low-latency audio output
