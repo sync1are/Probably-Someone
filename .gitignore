@@ -89,3 +89,4 @@ temp_audio_*.wav
 !tools.json
 !messaging/messaging_whitelist.json
 *.html
+launch_terminals.bat

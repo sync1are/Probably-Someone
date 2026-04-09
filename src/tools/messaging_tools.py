@@ -183,7 +183,7 @@ def start_messaging(platform="both"):
                 else:
                     return {
                         "success": False,
-                        "message": "Failed to start Discord. Run 'setup Discord' first."
+                        "message": "Failed to start Discord. Have you added DISCORD_USER_TOKEN to your .env file?"
                     }
 
         if started:
@@ -368,7 +368,6 @@ def add_messaging_contact(platform, contact):
             "message": "Failed to add contact."
         }
 
-
 def get_last_message(platform, contact=None):
     """
     Get the last message received from a contact or from any contact.
@@ -380,71 +379,96 @@ def get_last_message(platform, contact=None):
     Returns:
         dict: Success status with message details
     """
+    import json as _json
+    import os as _os
+    import time as _time
+
+    def _history_lookup(platform_key, contact_filter=None):
+        """Read last message from the shared messaging_history.json file."""
+        history_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_history.json"
+        if not history_file.exists():
+            return None
+        try:
+            data = _json.loads(history_file.read_text(encoding="utf-8"))
+            contacts = data.get(platform_key, {})
+            if not contacts:
+                return None
+
+            if contact_filter:
+                cf = contact_filter.lower()
+                # Match by name or ID substring
+                matched = {
+                    cid: info for cid, info in contacts.items()
+                    if cf in info.get("name", "").lower() or cf in cid.lower()
+                }
+                if not matched:
+                    return None
+                contacts = matched
+
+            # Return the most recently interacted contact
+            latest_id = max(contacts, key=lambda cid: contacts[cid].get("last_interaction", 0))
+            info = contacts[latest_id]
+            ts = info.get("last_interaction", 0)
+            time_str = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts)) if ts else "unknown time"
+            return {
+                "success": True,
+                "contact": info.get("name", latest_id),
+                "body": info.get("last_message", ""),
+                "reply_sent": info.get("last_reply", ""),
+                "timestamp": time_str,
+                "message": f"Last message from {info.get('name', latest_id)} at {time_str}: \"{info.get('last_message', '')}\""
+            }
+        except Exception:
+            return None
+
     try:
         if platform == "whatsapp":
-            # Check if WhatsApp bridge is running
+            # Try live bridge first (has real-time messages)
             try:
-                health_check = requests.get('http://localhost:3000/health', timeout=3)
-                if health_check.status_code != 200:
-                    return {
-                        "success": False,
-                        "message": "WhatsApp bridge is not running. Say 'start WhatsApp messaging' first."
-                    }
-            except:
-                return {
-                    "success": False,
-                    "message": "WhatsApp bridge is not running."
-                }
+                health_check = requests.get('http://localhost:3000/health', timeout=2)
+                if health_check.status_code == 200:
+                    params = {}
+                    if contact:
+                        params['contact'] = contact
+                    response = requests.get(
+                        'http://localhost:3000/last_message',
+                        params=params,
+                        timeout=5
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('success'):
+                            msg_data = data.get('message', {})
+                            from_name = msg_data.get('fromName', 'Unknown')
+                            body = msg_data.get('body', '')
+                            date = msg_data.get('date', '')
+                            return {
+                                "success": True,
+                                "message": f"Last message from {from_name}: \"{body}\"",
+                                "contact": from_name,
+                                "body": body,
+                                "timestamp": date
+                            }
+            except Exception:
+                pass
 
-            # Get last message via HTTP API
-            try:
-                params = {}
-                if contact:
-                    params['contact'] = contact
-
-                response = requests.get(
-                    'http://localhost:3000/last_message',
-                    params=params,
-                    timeout=5
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('success'):
-                        msg_data = data.get('message', {})
-                        from_name = msg_data.get('fromName', 'Unknown')
-                        body = msg_data.get('body', '')
-                        date = msg_data.get('date', '')
-
-                        return {
-                            "success": True,
-                            "message": f"Last message from {from_name}: \"{body}\"",
-                            "contact": from_name,
-                            "body": body,
-                            "timestamp": date
-                        }
-                    else:
-                        error = data.get('error', 'No messages found')
-                        return {
-                            "success": False,
-                            "message": f"No messages found. {error}"
-                        }
-                else:
-                    return {
-                        "success": False,
-                        "message": f"Failed to get messages: HTTP {response.status_code}"
-                    }
-
-            except requests.exceptions.RequestException as e:
-                return {
-                    "success": False,
-                    "message": f"Could not connect to WhatsApp: {str(e)}"
-                }
-
-        elif platform == "discord":
+            # Fall back to history file
+            result = _history_lookup("whatsapp", contact)
+            if result:
+                return result
             return {
                 "success": False,
-                "message": "Reading Discord messages not yet implemented."
+                "message": "No WhatsApp messages found yet. The bridge may not have received any messages since it started."
+            }
+
+        elif platform == "discord":
+            # Discord uses the shared history file written by discord_bot.py
+            result = _history_lookup("discord", contact)
+            if result:
+                return result
+            return {
+                "success": False,
+                "message": "No Discord messages found yet. Either no one has messaged, or the bot hasn't started."
             }
 
         else:
@@ -772,6 +796,16 @@ def _start_http_server():
 def _start_whatsapp_bridge():
     """Start WhatsApp bridge process in a new terminal window."""
     try:
+        # Check if the bridge is already running on port 3000 by attempting to reach the health endpoint
+        try:
+            res = requests.get("http://127.0.0.1:3000/health", timeout=1)
+            if res.status_code == 200:
+                print("WhatsApp bridge is already running in the background. Skipping startup.")
+                _messaging_processes["whatsapp_bridge"] = "Already running"
+                return True
+        except requests.exceptions.RequestException:
+            pass  # Not running, proceed with startup
+
         bridge_dir = Path(__file__).parent.parent.parent / "messaging" / "whatsapp_bridge"
 
         # Start in a new terminal window so QR code displays properly
@@ -797,9 +831,11 @@ def _start_whatsapp_bridge():
 def _start_discord_bot():
     """Start Discord bot process."""
     try:
+        import sys
         bot_file = Path(__file__).parent.parent.parent / "discord_bot.py"
+        # Run using the same python executable that the main app is using
         process = subprocess.Popen(
-            ['python', str(bot_file)],
+            [sys.executable, str(bot_file)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -818,3 +854,144 @@ def _start_discord_bot():
     except Exception as e:
         print(f"Error starting Discord bot: {e}")
         return False
+
+def set_autonomous_mode(enabled: bool, checkin_threshold_hours: int = 24):
+    """
+    Enable or disable ARIA's autonomous messaging mode for proactive check-ins.
+
+    Args:
+        enabled (bool): Whether to enable autonomous mode
+        checkin_threshold_hours (int): Hours of silence before ARIA checks in
+
+    Returns:
+        dict: Success status and message
+    """
+    import sys
+    try:
+        import __main__ as app
+
+        # Access the global autonomy_engine directly from app
+        if hasattr(app, 'autonomy_engine') and app.autonomy_engine:
+            if enabled:
+                app.autonomy_engine.checkin_threshold_hours = checkin_threshold_hours
+                app.autonomy_engine.start()
+
+                # Auto-start messaging if it isn't running
+                start_msg = start_messaging(platform="both")
+
+                return {
+                    "success": True,
+                    "message": f"Autonomous mode ENABLED. Will check in after {checkin_threshold_hours} hours of silence. Messaging systems started: {start_msg['message']}"
+                }
+            else:
+                app.autonomy_engine.stop()
+                return {
+                    "success": True,
+                    "message": "Autonomous mode DISABLED."
+                }
+        else:
+            return {
+                "success": False,
+                "message": "autonomy_engine is not yet initialized in the main app."
+            }
+    except ImportError:
+        # Fallback if we can't import app directly
+        return {
+            "success": False,
+            "message": "Could not access the main app module. It may not be initialized yet."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to change autonomous mode: {str(e)}"
+        }
+
+def send_proactive_message(platform: str, contact_id: str, context: str):
+    """
+    Proactively message a whitelisted contact with a specific goal.
+
+    Args:
+        platform (str): "whatsapp" or "discord"
+        contact_id (str): The ID of the contact to message
+        context (str): The reason or goal for the message
+
+    Returns:
+        dict: Success status and message
+    """
+    try:
+        import __main__ as app
+        import asyncio
+
+        if not hasattr(app, 'messaging_controller') or not app.messaging_controller:
+            return {
+                "success": False,
+                "message": "messaging_controller is not yet initialized in the main app."
+            }
+
+        # Need to run the async function in a new event loop or the current one
+        try:
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(
+                app.messaging_controller.initiate_conversation(
+                    platform=platform,
+                    contact_id=contact_id,
+                    contact_name=contact_id, # Fallback name
+                    context=context
+                )
+            )
+            # We don't wait for it, just let it run
+        except RuntimeError:
+            # No running event loop
+            asyncio.run(
+                app.messaging_controller.initiate_conversation(
+                    platform=platform,
+                    contact_id=contact_id,
+                    contact_name=contact_id, # Fallback name
+                    context=context
+                )
+            )
+
+        return {
+            "success": True,
+            "message": f"Successfully initiated proactive message to {contact_id} on {platform}."
+        }
+    except ImportError:
+        return {
+            "success": False,
+            "message": "Could not access the main app module."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to send proactive message: {str(e)}"
+        }
+
+def set_current_status(status: str):
+    """
+    Update the user's current status so the AI can inform contacts.
+    Persists to a shared file so the discord/whatsapp bot subprocess
+    picks it up immediately without needing a restart.
+
+    Args:
+        status (str): The status description (e.g. "Aze is on a coffee break")
+
+    Returns:
+        dict: Success status and message
+    """
+    try:
+        from src.messaging.config import set_current_status_file
+        set_current_status_file(status)
+
+        return {
+            "success": True,
+            "message": f"Status updated to: '{status}'. The messaging bot will mention this to anyone who asks.",
+            "data": {"status": status}
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to update status: {str(e)}"
+        }

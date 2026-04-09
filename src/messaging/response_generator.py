@@ -20,12 +20,27 @@ class ResponseGenerator:
         """Generate unique key for conversation tracking."""
         return f"{platform}:{contact_id}"
 
+    def _get_current_system_prompt(self) -> str:
+        """Dynamically build the system prompt including current status."""
+        from src.messaging.config import AI_SYSTEM_PROMPT, get_current_status
+        prompt = AI_SYSTEM_PROMPT
+        status = get_current_status()
+        if status:
+            prompt += f"\n\n[CURRENT STATUS: {status}]"
+        return prompt
+
     def _init_conversation(self, key: str):
         """Initialize conversation history for a contact."""
         if key not in self.conversation_history:
             self.conversation_history[key] = [
-                {"role": "system", "content": AI_SYSTEM_PROMPT}
+                {"role": "system", "content": self._get_current_system_prompt()}
             ]
+        else:
+            # Always ensure the system prompt is up-to-date with current status
+            self.conversation_history[key][0] = {
+                "role": "system",
+                "content": self._get_current_system_prompt()
+            }
 
     def _add_to_history(self, key: str, role: str, content: str):
         """Add message to conversation history."""
@@ -94,7 +109,8 @@ class ResponseGenerator:
             # Add assistant reply to history
             self._add_to_history(conv_key, "assistant", reply)
 
-            print(f"[AI] Generated reply in {latency:.2f}s: {reply[:50]}...")
+            safe_preview = reply[:50].encode('ascii', errors='replace').decode('ascii')
+            print(f"[AI] Generated reply in {latency:.2f}s: {safe_preview}...")
 
             return reply
 

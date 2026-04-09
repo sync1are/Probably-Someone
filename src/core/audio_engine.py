@@ -155,9 +155,15 @@ class AudioEngine:
     
     def wait_for_completion(self):
         """Wait for all audio to finish playing."""
-        while not self.audio_queue.empty() or not self.text_queue.empty():
+        # Add a small buffer to ensure the queue isn't just momentarily empty between chunks
+        empty_cycles = 0
+        while empty_cycles < 5:
+            if self.audio_queue.empty() and self.text_queue.empty():
+                empty_cycles += 1
+            else:
+                empty_cycles = 0
             sd.sleep(50)
-        sd.sleep(200)
+        sd.sleep(100)
 
     def interrupt(self):
         """Stop current playback and clear all pending audio/text."""

@@ -1,5 +1,7 @@
 """Central tool registry and execution dispatcher."""
 
+import inspect
+
 from src.tools.system_tools import (
     take_screenshot,
     get_clipboard,
@@ -54,7 +56,10 @@ from src.tools.messaging_tools import (
     add_messaging_contact,
     manage_whitelist,
     send_message,
-    get_last_message
+    get_last_message,
+    set_autonomous_mode,
+    send_proactive_message,
+    set_current_status
 )
 from src.tools.gmail_tools import (
     get_important_unread_emails,
@@ -124,7 +129,10 @@ TOOL_HANDLERS = {
     "add_messaging_contact": add_messaging_contact,
     "manage_whitelist": manage_whitelist,
     "send_message": send_message,
-    "get_last_message": get_last_message
+    "get_last_message": get_last_message,
+    "set_autonomous_mode": set_autonomous_mode,
+    "send_proactive_message": send_proactive_message,
+    "set_current_status": set_current_status
 }
 
 
@@ -144,6 +152,23 @@ def execute_tool(tool_name, arguments):
     
     try:
         handler = TOOL_HANDLERS[tool_name]
+
+        # Filter out any kwargs the LLM may have hallucinated that the
+        # function doesn't actually accept. This prevents TypeErrors like
+        # "unexpected keyword argument 'contact_name'".
+        sig = inspect.signature(handler)
+        accepts_var_kwargs = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in sig.parameters.values()
+        )
+        if not accepts_var_kwargs:
+            valid_params = set(sig.parameters.keys())
+            filtered = {k: v for k, v in arguments.items() if k in valid_params}
+            if filtered != arguments:
+                dropped = set(arguments.keys()) - valid_params
+                print(f"  [Registry] Dropped unknown kwargs for {tool_name}: {dropped}")
+            arguments = filtered
+
         return handler(**arguments)
     except Exception as e:
         return {"success": False, "error": f"Error executing {tool_name}: {str(e)}"}

@@ -4,8 +4,16 @@ Refactored modular architecture with Spotify integration
 """
 
 import json
+import sys
+import codecs
 from src.config import SYSTEM_PROMPT, DEFAULT_MODEL, TOOLS_FILE
 from src.core.llm_client import LLMClient
+
+# Set standard output encoding to utf-8 to prevent charmap errors in Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 from src.core.audio_engine import AudioEngine, StreamingTextProcessor
 from src.tools.registry import execute_tool
 
@@ -30,7 +38,7 @@ def stream_response(response, audio_engine, is_code=False):
         first_chunk = True
 
     for part in response:
-        chunk = part['message']['content']
+        chunk = part.get('message', {}).get('content', '')
 
         if not is_code and first_chunk:
             # We use \r to overwrite the "Generating text..." line, clearing the whole line
@@ -184,23 +192,44 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     return final_response, None, is_writing_code
 
 
+# Global components
+messaging_controller = None
+autonomy_engine = None
+
 def main():
+    global messaging_controller, autonomy_engine
+
     """Main application loop."""
     # Initialize components
     llm_client = LLMClient()
     audio_engine = AudioEngine()
     tools = load_tools()
-    
+
+    # Initialize messaging system
+    from src.messaging.controller import MessagingController
+    from src.messaging.autonomy_engine import AutonomyEngine
+    from src.tools.messaging_tools import start_messaging
+
+    messaging_controller = MessagingController()
+    autonomy_engine = AutonomyEngine(messaging_controller)
+    autonomy_engine.start()
+
+    # Auto-start Discord and WhatsApp bridges in the background
+    print("\n[Boot] Starting background messaging bridges...")
+    start_messaging(platform="both")
+
     # Initialize conversation
     conversation_history = [{"role": "system", "content": SYSTEM_PROMPT}]
     
     print("🤖 ARIA Voice Assistant Started!")
     print("📸 Screenshot tool enabled")
-    print("🎵 Spotify controls enabled - try 'play some jazz' or 'pause music'")
+    print("🎵 Spotify controls enabled")
+    print("🤖 Autonomous Messaging Mode active")
     print("Type 'quit' or 'exit' to stop\n")
     
     try:
         while True:
+            # ... (rest of the loop)
             user_input = input("You: ").strip()
             
             if user_input.lower() in ['quit', 'exit', 'bye', 'q']:
@@ -292,6 +321,18 @@ def main():
     
     finally:
         audio_engine.shutdown()
+
+        # Kill the background messaging processes cleanly when the app closes
+        if messaging_controller:
+            from src.tools.messaging_tools import _messaging_processes
+            for name, process in _messaging_processes.items():
+                # Avoid attempting to terminate if it's just marked as "Already running"
+                if process and process != "Already running" and hasattr(process, 'terminate'):
+                    try:
+                        print(f"Shutting down {name}...")
+                        process.terminate()
+                    except Exception as e:
+                        pass
 
 
 if __name__ == "__main__":

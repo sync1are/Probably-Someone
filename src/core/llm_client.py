@@ -11,11 +11,11 @@ class LLMClient:
 
     def chat(self, model, messages, tools=None, stream=False):
         """Send a chat request to the Ollama API."""
-        # Note: Do not pass think=True to Ollama when using tools,
-        # as it causes a 400 ResponseError with Gemini models
+        # think=False explicitly passed
         return chat(
             model=model,
             messages=messages,
             tools=tools,
-            stream=stream
+            stream=stream,
+            think=False
         )

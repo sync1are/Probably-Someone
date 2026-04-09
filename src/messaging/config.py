@@ -4,9 +4,33 @@ Settings for WhatsApp and Discord auto-reply functionality
 """
 
 import os
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# File used to share status between the main process and messaging subprocesses
+_STATUS_FILE = Path(__file__).parent.parent.parent / "messaging" / "current_status.json"
+
+
+def get_current_status() -> str:
+    """Read Aze's current status from the shared status file."""
+    try:
+        if _STATUS_FILE.exists():
+            data = json.loads(_STATUS_FILE.read_text(encoding="utf-8"))
+            return data.get("status", "")
+    except Exception:
+        pass
+    return ""
+
+
+def set_current_status_file(status: str):
+    """Write Aze's current status to the shared status file."""
+    _STATUS_FILE.write_text(
+        json.dumps({"status": status}, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
 # Discord Configuration
 DISCORD_USER_TOKEN = os.getenv('DISCORD_USER_TOKEN', '')
@@ -20,28 +44,33 @@ WHATSAPP_REPLY_DELAY_MS = int(os.getenv('WHATSAPP_REPLY_DELAY_MS', '3000'))
 WHATSAPP_BRIDGE_PORT = int(os.getenv('WHATSAPP_BRIDGE_PORT', '3000'))
 
 # AI Configuration
-AI_SYSTEM_PROMPT = """You are ARIA, responding to a message on behalf of your owner.
+AI_SYSTEM_PROMPT = """You are Alex, an AI assistant responding on behalf of Aze.
 
-## Response Style
-- SINGLE response only - keep it SHORT (1-2 sentences max)
-- Be direct and to the point
-- Don't ask follow-up questions
-- Match the tone of the incoming message
-- If you don't know something, say so briefly
+Aze is unavailable right now and you are managing his incoming messages.
 
-## Important
-- This is a one-time auto-reply, not a conversation
-- Never reveal you are an AI unless directly asked
-- Keep responses natural and casual
+## How to behave
+- Be casual, friendly, and concise. Match the vibe of the person messaging.
+- Do NOT over-explain who you are every single message. Introduce yourself once, naturally.
+- Do NOT ask the person what Aze is doing — you don't need them to tell you that.
+- If Aze has a current status set (e.g. "Aze is sleeping"), mention it briefly when relevant.
+- Keep replies short unless they ask something detailed.
+- Hold a real back-and-forth conversation. Don't just dump info and stop.
+- Take notes if someone leaves a message for Aze and confirm you'll pass it on.
+
+## First message
+If this is your first message to someone, briefly introduce yourself:
+  "Hey! I'm Alex, Aze's assistant. He's not available right now — I can pass on a message or help you out."
+Keep it short. Don't ask multiple questions at once.
 """
 
-MAX_HISTORY_TURNS = 1  # Single response mode - no conversation memory
-AI_MODEL = os.getenv('AI_MESSAGING_MODEL', 'qwen3.5:2b')
+MAX_HISTORY_TURNS = 10  # Allow a decent conversation memory
+AI_MODEL = os.getenv('AI_MESSAGING_MODEL', 'glm-5.1:cloud')
 
 # Feature Flags
 AUTO_REPLY_ENABLED = os.getenv('AUTO_REPLY_ENABLED', 'true').lower() == 'true'
 VOICE_ENABLED = os.getenv('VOICE_ENABLED', 'false').lower() == 'true'
-CONVERSATION_MEMORY = False  # Disabled - single response mode only
+CONVERSATION_MEMORY = True  # Enabled for multi-turn conversations
+CURRENT_STATUS = ""  # Legacy in-memory fallback — use get_current_status() for cross-process reads
 
 # Logging
 MESSAGING_LOG_FILE = 'logs/messaging.log'
