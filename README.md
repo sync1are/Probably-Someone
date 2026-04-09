@@ -1,0 +1,138 @@
+# ARIA Voice Assistant
+
+A voice-enabled AI assistant with Spotify integration, screenshot analysis, messaging automation, and powerful context-aware tools.
+
+## Features
+
+- 🎙️ **Voice Output** - Natural TTS using Kokoro
+- 🎵 **Spotify Control** - Play, pause, skip, queue songs via voice
+- 💬 **Messaging Automation** - Auto-reply on WhatsApp & Discord
+- 📧 **Gmail Integration** - AI can read your important unread emails
+- 📸 **Screenshot Analysis** - AI can see and analyze your screen
+- 📋 **Clipboard Management** - "Summarize what I copied", copy AI responses
+- 🪟 **Window Context** - AI knows what app you're using
+- 🌐 **Web Scraping** - "Summarize this article [URL]"
+- 🤖 **LLM Integration** - Powered by local Ollama API or **NVIDIA NIM (Nemotron 120B Reasoning Model)** for high-performance cloud logic
+
+## Quick Start
+
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Run the assistant
+python app.py
+
+# Start messaging system separately (optional)
+cd messaging
+python start_messaging.py
+```
+
+## New Features 🚀
+
+### NVIDIA NIM Backend Integration
+- Choose between local (Ollama) or secure cloud inference (NVIDIA NIM).
+- Uses the bleeding-edge **Nemotron 120B reasoning model** for deeper multi-step tool solving and highly reliable workflow automation.
+- Zero-leakage streaming response guarantees tool-calls never clutter your terminal interface.
+
+### Terminal Chatbot
+- Interactive rich terminal loop processing natural language and multi-turn context seamlessly.
+- Visual status indicators so you know when the AI is thinking, executing workflows, or writing files.
+
+### Robust Autonomous Messaging
+- **"Setup WhatsApp"** - Connect WhatsApp with QR code authentication with zero HTTP 404 sync issues.
+- **"Setup Discord"** - Configure Discord bot with user token. Background DM polling ensures fluid interactions.
+- **"Start messaging"** - Activate auto-reply for both platforms. Cross-process state keeps the central AI aware of all threads.
+- **"Add [name] to whitelist"** - Allow auto-reply for specific contacts.
+- **"Send [contact] a message"** - Proactive messaging via voice.
+- **Single-response mode** - Quick replies without conversation loops.
+
+### Gmail Integration
+- **"Do I have any important emails?"** - Read summary of new important emails.
+- **"Read me the email from John"** - Read full email content.
+- Secure local authentication (OAuth 2.0). Read-only access by default.
+
+### Clipboard Management
+- **"What did I copy?"** - Get clipboard content.
+- **"Summarize what's in my clipboard"** - Analyze copied text.
+- **"Copy this to clipboard"** - Save AI response.
+- **"Fix the grammar in my clipboard"** - Edit and analyze.
+
+### Active Window Detection & Apps Control
+- **"What app am I using?"** - Context-aware assistance across VS Code, Chrome, Excel, etc.
+- **"Open File Explorer"** - Launch local applications by name.
+- **"Minimize Chrome" / "Maximize VS Code"** - Control window state.
+- **"Switch to Discord"** - Bring specific apps to the foreground.
+
+### System & Audio Control
+- **"Set volume to 50%" / "Mute"** - Control master volume.
+- **"Set brightness to 20%"** - Control monitor brightness.
+
+### File Management & Multi-Step Workflows
+- **"Create a file called notes.txt"** - AI can save text files.
+- **"Create an HTML file and open it"** - AI can chain tools to write a file and instantly launch it.
+- **"Append this to grocery.txt"** - Add to existing files.
+
+## Project Structure
+
+```
+D:\VERISON 3\
+├── app.py                     # Main ARIA entry point
+├── README.md                  # This file
+├── tools.json                 # Tool definitions for LLM
+├── requirements.txt           # Python dependencies
+├── .env                       # API keys and configuration
+│
+├── src/                       # Source code
+│   ├── core/                  # Core modules
+│   │   ├── llm_client.py      # Ollama & NVIDIA client wrapper
+│   │   └── audio_engine.py    # TTS and audio playback
+│   ├── tools/                 # Tool implementations
+│   ├── messaging/             # Messaging backend
+│   └── config.py              # Configuration
+│
+├── messaging/                 # Messaging applications
+│   ├── discord_bot.py         # Discord bot
+│   ├── start_messaging.py     # Messaging launcher
+│   └── whatsapp_bridge/       # WhatsApp Node.js bridge
+│
+├── tests/                     # Testing suite
+└── docs/                      # Extensive Documentation folder
+```
+
+## Setup
+
+### 1. Python Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Environment Variables (`.env`)
+```env
+# NVIDIA NIM API (Needed if using Cloud Model)
+NVIDIA_API_KEY=your_nvidia_key
+
+# LLM API
+OLLAMA_API_KEY=your_ollama_key
+
+# Spotify (requires Premium)
+SPOTIPY_CLIENT_ID=your_spotify_client_id
+SPOTIPY_CLIENT_SECRET=your_spotify_client_secret
+SPOTIPY_REDIRECT_URI=http://127.0.0.1:8888/callback
+
+# Discord (optional - for messaging)
+DISCORD_USER_TOKEN=your_discord_user_token
+```
+
+### 3. Setup APIs
+- **Spotify:** Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and get Client ID/Secret. Add `http://127.0.0.1:8888/callback` as a Redirect URI.
+- **NVIDIA NIM:** Sign up for an API key at NVIDIA build platform to use Nemotron 120B.
+- **Gmail:** Enable the **Gmail API** in Google Cloud Console, download the JSON as `credentials.json`. 
+- **WhatsApp:** `cd messaging/whatsapp_bridge` and `npm install`.
+
+## Architecture
+
+- **ReAct Tool Chaining** - ARIA can automatically call multiple tools sequentially in a single turn (e.g., generate a file, read its path, then automatically open it in your browser).
+- **Dual AI Backends** - Seamlessly switch between zero-latency local models or massively scaled cloud models.
+- **Modular Design & Tool Registry Pattern** - Clean separation of concerns making it easy to add new capabilities.
+- **Multithreaded Messaging Engine** - Non-blocking message polling ensuring your WhatsApp and Discord bots remain responsive dynamically.
