@@ -820,17 +820,43 @@
     {
       "type": "function",
       "function": {
-        "name": "set_current_status",
-        "description": "Set the user's current physical status (e.g., 'cooking', 'in a meeting', 'sleeping'). ARIA will use this when chatting with others.",
+        "name": "store_user_message",
+        "description": "Store a message for the user when a contact asks you to tell them something or leave a message while they are away.",
         "parameters": {
           "type": "object",
           "properties": {
-            "status": {
+            "contact_name": {
               "type": "string",
-              "description": "A short description of what the user is currently doing"
+              "description": "Name of the person leaving the message"
+            },
+            "platform": {
+              "type": "string",
+              "enum": ["whatsapp", "discord"],
+              "description": "The platform the message was received on"
+            },
+            "message_content": {
+              "type": "string",
+              "description": "The content of the message to relay to the user"
             }
           },
-          "required": ["status"]
+          "required": ["contact_name", "platform", "message_content"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_pending_messages",
+        "description": "Retrieve and optionally clear pending messages left for the user.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "clear": {
+              "type": "boolean",
+              "description": "Whether to clear the messages after retrieving them (default: true)"
+            }
+          },
+          "required": ["clear"]
         }
       }
     }

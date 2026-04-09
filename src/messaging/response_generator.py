@@ -94,14 +94,55 @@ class ResponseGenerator:
             # Generate response
             start_time = time.time()
 
+            # Allow the autonomous messaging AI to use tools (like store_user_message)
+            # Load tools directly to avoid importing app.py in subprocess context
+            import json as _json
+            from src.config import TOOLS_FILE
+            with open(TOOLS_FILE, 'r') as _f:
+                tools = _json.load(_f)['tools']
+
+            # First chat call, check if the LLM wants to use a tool
             response = self.llm_client.chat(
                 model=AI_MODEL,
                 messages=self.conversation_history[conv_key],
+                tools=tools,
                 stream=False
             )
 
             latency = time.time() - start_time
-            reply = response.get('message', {}).get('content', '')
+            message_obj = response.get('message', {})
+
+            # ReAct loop for the autonomous assistant
+            from src.tools.registry import execute_tool
+            import json
+
+            while message_obj.get('tool_calls'):
+                self._add_to_history(conv_key, "assistant", message_obj.get('content', ''))
+                # We also need to append the raw tool_calls to the conversation history so Ollama accepts the format
+                self.conversation_history[conv_key][-1]['tool_calls'] = message_obj.get('tool_calls')
+
+                for tool_call in message_obj['tool_calls']:
+                    tool_name = tool_call['function']['name']
+                    args = tool_call['function']['arguments']
+                    print(f"  [Auto-Agent] Calling tool: {tool_name}")
+
+                    result = execute_tool(tool_name, args)
+
+                    self.conversation_history[conv_key].append({
+                        'role': 'tool',
+                        'content': json.dumps(result)
+                    })
+
+                # Follow-up request to LLM
+                response = self.llm_client.chat(
+                    model=AI_MODEL,
+                    messages=self.conversation_history[conv_key],
+                    tools=tools,
+                    stream=False
+                )
+                message_obj = response.get('message', {})
+
+            reply = message_obj.get('content', '')
 
             if not reply:
                 reply = "Sorry, I couldn't generate a response right now."
@@ -115,6 +156,8 @@ class ResponseGenerator:
             return reply
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"[ERROR] Failed to generate reply: {e}")
             return "Sorry, I'm having trouble responding right now."
 

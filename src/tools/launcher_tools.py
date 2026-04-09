@@ -108,12 +108,19 @@ def open_application(app_name: str) -> Dict[str, Any]:
 
         # Handle explicit websites (e.g., "open google.com")
         if "." in app_lower and ("/" not in app_lower or "http" in app_lower):
-            url = app_lower if app_lower.startswith("http") else f"https://{app_lower}"
-            webbrowser.open(url)
-            return {
-                "success": True,
-                "message": f"Opened website: {url}"
-            }
+            # If the user tries to launch a local executable with arguments (like notepad.exe path/to/file),
+            # prevent it from treating the whole string as a website.
+            is_local_command = any(ext in app_lower for ext in [".exe", ".bat", ".cmd", "c:/", "c:\\"])
+            if is_local_command:
+                # Let it fall through to the subprocess launcher below
+                pass
+            else:
+                url = app_lower if app_lower.startswith("http") else f"https://{app_lower}"
+                webbrowser.open(url)
+                return {
+                    "success": True,
+                    "message": f"Opened website: {url}"
+                }
 
         # Look up executable name from aliases
         executable = COMMON_APPS.get(app_lower, app_lower)

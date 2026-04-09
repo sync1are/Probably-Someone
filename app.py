@@ -6,13 +6,15 @@ Refactored modular architecture with Spotify integration
 import json
 import sys
 import codecs
-from src.config import SYSTEM_PROMPT, DEFAULT_MODEL, TOOLS_FILE
+import time
+import re
+from src.config import SYSTEM_PROMPT, NVIDIA_SYSTEM_PROMPT, DEFAULT_MODEL, NVIDIA_MODEL, TOOLS_FILE
 from src.core.llm_client import LLMClient
 
 # Set standard output encoding to utf-8 to prevent charmap errors in Windows
-if sys.stdout.encoding != 'utf-8':
+if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding != 'utf-8':
     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-if sys.stderr.encoding != 'utf-8':
+if hasattr(sys.stderr, 'encoding') and sys.stderr.encoding != 'utf-8':
     sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 from src.core.audio_engine import AudioEngine, StreamingTextProcessor
 from src.tools.registry import execute_tool
@@ -38,7 +40,7 @@ def stream_response(response, audio_engine, is_code=False):
         first_chunk = True
 
     for part in response:
-        chunk = part.get('message', {}).get('content', '')
+        chunk = part.get('message', {}).get('content', '') or ''
 
         if not is_code and first_chunk:
             # We use \r to overwrite the "Generating text..." line, clearing the whole line
@@ -53,7 +55,11 @@ def stream_response(response, audio_engine, is_code=False):
     print("\n")
     processor.flush()
 
-    return full_response
+    # Strip any raw XML tool_call tags the model may have leaked into its text response
+    # e.g. <tool_call><function=open_file>...</tool_call>
+    cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', full_response, flags=re.DOTALL).strip()
+
+    return cleaned
 
 
 def process_tool_calls(message, conversation_history, llm_client, tools, audio_engine):
@@ -198,10 +204,27 @@ autonomy_engine = None
 
 def main():
     global messaging_controller, autonomy_engine
+    global DEFAULT_MODEL
 
     """Main application loop."""
+    print("Welcome to ARIA.")
+    print("Please select your AI backend:")
+    print("1. Ollama (Local - Default)")
+    print("2. NVIDIA NIM (Cloud)")
+    
+    choice = input("\nEnter choice (1 or 2): ").strip()
+    if choice == '2':
+        backend = "nvidia"
+        DEFAULT_MODEL = NVIDIA_MODEL
+        active_system_prompt = NVIDIA_SYSTEM_PROMPT
+        print(f"Selected NVIDIA NIM  ({NVIDIA_MODEL}).\n")
+    else:
+        backend = "ollama"
+        active_system_prompt = SYSTEM_PROMPT
+        print("Selected Ollama.\n")
+
     # Initialize components
-    llm_client = LLMClient()
+    llm_client = LLMClient(backend=backend)
     audio_engine = AudioEngine()
     tools = load_tools()
 
@@ -219,14 +242,23 @@ def main():
     start_messaging(platform="both")
 
     # Initialize conversation
-    conversation_history = [{"role": "system", "content": SYSTEM_PROMPT}]
-    
+    conversation_history = [{"role": "system", "content": active_system_prompt}]
+
     print("🤖 ARIA Voice Assistant Started!")
     print("📸 Screenshot tool enabled")
     print("🎵 Spotify controls enabled")
     print("🤖 Autonomous Messaging Mode active")
     print("Type 'quit' or 'exit' to stop\n")
-    
+
+    # Check for pending messages on boot
+    from src.tools.messaging_tools import get_pending_messages
+    pending = get_pending_messages(clear=True)
+    if pending and pending.get('success') and pending.get('messages'):
+        welcome_msg = pending.get('message')
+        print(f"🤖 AI: {welcome_msg}\n")
+        audio_engine.queue_text(welcome_msg)
+        audio_engine.signal_done()
+
     try:
         while True:
             # ... (rest of the loop)
@@ -247,15 +279,25 @@ def main():
                 'role': 'user',
                 'content': user_input
             })
-            
-            # Get initial response (check for tool calls)
-            response = llm_client.chat(
-                model=DEFAULT_MODEL,
-                messages=conversation_history,
-                tools=tools,
-                stream=False
-            )
-            
+
+            # --- TOOL-AWARE PATH (Ollama + NVIDIA) ---
+            # First call is stream=False so we can detect tool calls cleanly.
+            # For NVIDIA this means a short wait, but tools will work correctly.
+            _t_start = time.time()
+            print("⏳ AI is thinking...", end="\r", flush=True)
+            try:
+                response = llm_client.chat(
+                    model=DEFAULT_MODEL,
+                    messages=conversation_history,
+                    tools=tools,
+                    stream=False
+                )
+            except KeyboardInterrupt:
+                print("\n[Interrupted]\n")
+                conversation_history.pop()
+                continue
+
+            _t_first_token = time.time() - _t_start
             message = response['message']
             
             # Handle tool calls in a ReAct loop
@@ -288,6 +330,7 @@ def main():
                 })
 
                 # Check if the LLM wants to call another tool based on the result
+                print("⏳ AI is continuing workflow...", end="\r", flush=True)
                 next_response = llm_client.chat(
                     model=DEFAULT_MODEL,
                     messages=conversation_history,
@@ -304,20 +347,22 @@ def main():
 
             if not message.get('tool_calls') and loop_count == 0:
                 # Direct response, no tools used at all
-                print("\n⏳ Generating text...", end="", flush=True)
-                streamed = llm_client.chat(
-                    model=DEFAULT_MODEL,
-                    messages=conversation_history,
-                    stream=True
-                )
-                full_response = stream_response(streamed, audio_engine)
+                def _fake_stream(content):
+                    words = content.split(" ")
+                    for i, word in enumerate(words):
+                        yield {"message": {"content": word + (" " if i < len(words) - 1 else "")}}
+
+                content = message.get("content", "")
+                print("\033[K", end="")  # Clear the thinking line
+                full_response = stream_response(_fake_stream(content), audio_engine)
                 conversation_history.append({
                     'role': 'assistant',
                     'content': full_response
                 })
                 audio_engine.signal_done()
             
-            print("✓ Done\n")
+            _t_total = time.time() - _t_start
+            print(f"✓ Done  ({_t_first_token:.1f}s to first response · {_t_total:.1f}s total)\n")
     
     finally:
         audio_engine.shutdown()

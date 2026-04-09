@@ -11,12 +11,110 @@ import requests
 from pathlib import Path
 
 
+import json
+
 # Global state for running processes
 _messaging_processes = {
     "whatsapp_bridge": None,
     "discord_bot": None,
     "http_server": None
 }
+
+PENDING_MESSAGES_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_user_messages.json"
+
+def _init_pending_messages():
+    """Initialize the pending messages file if it doesn't exist."""
+    if not PENDING_MESSAGES_FILE.parent.exists():
+        PENDING_MESSAGES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not PENDING_MESSAGES_FILE.exists():
+        with open(PENDING_MESSAGES_FILE, 'w') as f:
+            json.dump({"pending_count": 0, "messages": []}, f, indent=2)
+
+def store_user_message(contact_name: str, platform: str, message_content: str):
+    """
+    Store a message for the user.
+
+    Args:
+        contact_name (str): Name of the person leaving the message
+        platform (str): Platform the message was received on
+        message_content (str): The content of the message
+
+    Returns:
+        dict: Success status and confirmation
+    """
+    try:
+        _init_pending_messages()
+        with open(PENDING_MESSAGES_FILE, 'r') as f:
+            data = json.load(f)
+
+        new_message = {
+            "platform": platform,
+            "name": contact_name,
+            "content": message_content,
+            "timestamp": int(time.time())
+        }
+
+        data["messages"].append(new_message)
+        data["pending_count"] = len(data["messages"])
+
+        with open(PENDING_MESSAGES_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        return {
+            "success": True,
+            "message": f"Successfully saved message from {contact_name} on {platform}. I will tell the user when they return."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to store user message."
+        }
+
+def get_pending_messages(clear: bool = True):
+    """
+    Retrieve and optionally clear pending messages.
+
+    Args:
+        clear (bool): Whether to clear the messages after retrieving them
+
+    Returns:
+        dict: Success status and list of messages
+    """
+    try:
+        _init_pending_messages()
+        with open(PENDING_MESSAGES_FILE, 'r') as f:
+            data = json.load(f)
+
+        messages = data.get("messages", [])
+        count = data.get("pending_count", 0)
+
+        if clear and count > 0:
+            with open(PENDING_MESSAGES_FILE, 'w') as f:
+                json.dump({"pending_count": 0, "messages": []}, f, indent=2)
+
+        if count == 0:
+            return {
+                "success": True,
+                "message": "No pending messages found.",
+                "messages": []
+            }
+
+        formatted_messages = "\n".join(
+            [f"- From {m['name']} on {m['platform']}: '{m['content']}'" for m in messages]
+        )
+
+        return {
+            "success": True,
+            "message": f"You have {count} pending message(s):\n{formatted_messages}",
+            "messages": messages
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to retrieve pending messages."
+        }
 
 
 def setup_whatsapp():

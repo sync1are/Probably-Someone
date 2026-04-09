@@ -59,7 +59,9 @@ from src.tools.messaging_tools import (
     get_last_message,
     set_autonomous_mode,
     send_proactive_message,
-    set_current_status
+    set_current_status,
+    store_user_message,
+    get_pending_messages
 )
 from src.tools.gmail_tools import (
     get_important_unread_emails,
@@ -132,7 +134,9 @@ TOOL_HANDLERS = {
     "get_last_message": get_last_message,
     "set_autonomous_mode": set_autonomous_mode,
     "send_proactive_message": send_proactive_message,
-    "set_current_status": set_current_status
+    "set_current_status": set_current_status,
+    "store_user_message": store_user_message,
+    "get_pending_messages": get_pending_messages
 }
 
 
