@@ -13,7 +13,9 @@
               "description": "Volume percentage from 0 to 100"
             }
           },
-          "required": ["level"]
+          "required": [
+            "level"
+          ]
         }
       }
     },
@@ -32,11 +34,16 @@
             },
             "direction": {
               "type": "string",
-              "enum": ["up", "down"],
+              "enum": [
+                "up",
+                "down"
+              ],
               "description": "Whether to increase or decrease volume"
             }
           },
-          "required": ["direction"]
+          "required": [
+            "direction"
+          ]
         }
       }
     },
@@ -50,7 +57,11 @@
           "properties": {
             "state": {
               "type": "string",
-              "enum": ["mute", "unmute", "toggle"],
+              "enum": [
+                "mute",
+                "unmute",
+                "toggle"
+              ],
               "description": "The desired mute state",
               "default": "toggle"
             }
@@ -71,7 +82,9 @@
               "description": "Brightness percentage from 0 to 100"
             }
           },
-          "required": ["level"]
+          "required": [
+            "level"
+          ]
         }
       }
     },
@@ -96,7 +109,10 @@
               "description": "If true, attempts to parse and save the content as a perfectly formatted JSON file. Default is false."
             }
           },
-          "required": ["filename", "content"]
+          "required": [
+            "filename",
+            "content"
+          ]
         }
       }
     },
@@ -117,7 +133,10 @@
               "description": "The text to add"
             }
           },
-          "required": ["filename", "content"]
+          "required": [
+            "filename",
+            "content"
+          ]
         }
       }
     },
@@ -134,7 +153,9 @@
               "description": "Name of the file to read"
             }
           },
-          "required": ["filename"]
+          "required": [
+            "filename"
+          ]
         }
       }
     },
@@ -171,7 +192,9 @@
               "description": "The last page to read (inclusive). If omitted, reads to the end."
             }
           },
-          "required": ["filename"]
+          "required": [
+            "filename"
+          ]
         }
       }
     },
@@ -190,11 +213,16 @@
             },
             "direction": {
               "type": "string",
-              "enum": ["up", "down"],
+              "enum": [
+                "up",
+                "down"
+              ],
               "description": "Whether to increase or decrease brightness"
             }
           },
-          "required": ["direction"]
+          "required": [
+            "direction"
+          ]
         }
       }
     },
@@ -230,7 +258,12 @@
           "properties": {
             "action": {
               "type": "string",
-              "enum": ["play", "pause", "next", "previous"],
+              "enum": [
+                "play",
+                "pause",
+                "next",
+                "previous"
+              ],
               "description": "The media action to perform"
             },
             "target": {
@@ -239,7 +272,9 @@
               "default": null
             }
           },
-          "required": ["action"]
+          "required": [
+            "action"
+          ]
         }
       }
     },
@@ -256,7 +291,9 @@
               "description": "The name of the application or website to launch"
             }
           },
-          "required": ["app_name"]
+          "required": [
+            "app_name"
+          ]
         }
       }
     },
@@ -324,7 +361,9 @@
               "description": "Title or partial title of the window to switch to"
             }
           },
-          "required": ["title"]
+          "required": [
+            "title"
+          ]
         }
       }
     },
@@ -369,7 +408,9 @@
               "description": "The unique ID of the email to read (provided by get_important_unread_emails)"
             }
           },
-          "required": ["email_id"]
+          "required": [
+            "email_id"
+          ]
         }
       }
     },
@@ -410,7 +451,9 @@
               "description": "The text to copy to clipboard"
             }
           },
-          "required": ["text"]
+          "required": [
+            "text"
+          ]
         }
       }
     },
@@ -439,7 +482,9 @@
               "description": "The URL of the webpage to scrape"
             }
           },
-          "required": ["url"]
+          "required": [
+            "url"
+          ]
         }
       }
     },
@@ -457,7 +502,12 @@
             },
             "content_type": {
               "type": "string",
-              "enum": ["track", "playlist", "album", "artist"],
+              "enum": [
+                "track",
+                "playlist",
+                "album",
+                "artist"
+              ],
               "description": "Type of content"
             }
           },
@@ -514,7 +564,9 @@
               "description": "Track to add"
             }
           },
-          "required": ["query"]
+          "required": [
+            "query"
+          ]
         }
       }
     },
@@ -543,7 +595,9 @@
               "description": "True for on, False for off"
             }
           },
-          "required": ["state"]
+          "required": [
+            "state"
+          ]
         }
       }
     },
@@ -557,10 +611,16 @@
           "properties": {
             "state": {
               "type": "string",
-              "enum": ["track", "context", "off"]
+              "enum": [
+                "track",
+                "context",
+                "off"
+              ]
             }
           },
-          "required": ["state"]
+          "required": [
+            "state"
+          ]
         }
       }
     },
@@ -578,7 +638,9 @@
               "maximum": 100
             }
           },
-          "required": ["volume_percent"]
+          "required": [
+            "volume_percent"
+          ]
         }
       }
     },
@@ -640,11 +702,17 @@
           "properties": {
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord", "both"],
+              "enum": [
+                "whatsapp",
+                "discord",
+                "both"
+              ],
               "description": "Which platform to start"
             }
           },
-          "required": ["platform"]
+          "required": [
+            "platform"
+          ]
         }
       }
     },
@@ -676,25 +744,30 @@
       "type": "function",
       "function": {
         "name": "add_messaging_contact",
-        "description": "Add a contact to the messaging whitelist. Use when user wants to add someone to auto-reply list. IMPORTANT: only use the two parameters below — 'platform' and 'contact'. Do NOT invent or add extra parameters like 'contact_name' or 'name'.",
+        "description": "Add a contact to the messaging whitelist. Use when user wants to add someone to auto-reply list. IMPORTANT: only use the two parameters below \u00e2\u20ac\u201d 'platform' and 'contact'. Do NOT invent or add extra parameters like 'contact_name' or 'name'.",
         "parameters": {
           "type": "object",
           "properties": {
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord"],
+              "enum": [
+                "whatsapp",
+                "discord"
+              ],
               "description": "Platform for the contact"
             },
             "contact": {
               "type": "string",
-              "description": "Phone number for WhatsApp or Discord user ID for Discord. If the user also gives a name/label for the contact, just use the ID/number here — names are stored separately."
+              "description": "Phone number for WhatsApp or Discord user ID for Discord. If the user also gives a name/label for the contact, just use the ID/number here \u00e2\u20ac\u201d names are stored separately."
             }
           },
-          "required": ["platform", "contact"]
+          "required": [
+            "platform",
+            "contact"
+          ]
         }
       }
     },
-
     {
       "type": "function",
       "function": {
@@ -705,12 +778,20 @@
           "properties": {
             "action": {
               "type": "string",
-              "enum": ["add", "remove", "list", "clear"],
+              "enum": [
+                "add",
+                "remove",
+                "list",
+                "clear"
+              ],
               "description": "Action to perform: add, remove, list, or clear"
             },
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord"],
+              "enum": [
+                "whatsapp",
+                "discord"
+              ],
               "description": "Platform (required for add/remove/clear, optional for list)"
             },
             "contact": {
@@ -718,7 +799,9 @@
               "description": "Contact identifier (required for add/remove)"
             }
           },
-          "required": ["action"]
+          "required": [
+            "action"
+          ]
         }
       }
     },
@@ -732,7 +815,10 @@
           "properties": {
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord"],
+              "enum": [
+                "whatsapp",
+                "discord"
+              ],
               "description": "Platform to send on"
             },
             "contact": {
@@ -744,7 +830,11 @@
               "description": "Message to send"
             }
           },
-          "required": ["platform", "contact", "message"]
+          "required": [
+            "platform",
+            "contact",
+            "message"
+          ]
         }
       }
     },
@@ -758,7 +848,10 @@
           "properties": {
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord"],
+              "enum": [
+                "whatsapp",
+                "discord"
+              ],
               "description": "Platform to check"
             },
             "contact": {
@@ -766,7 +859,9 @@
               "description": "Contact name or number (optional - if not provided, returns last message from anyone)"
             }
           },
-          "required": ["platform"]
+          "required": [
+            "platform"
+          ]
         }
       }
     },
@@ -787,7 +882,9 @@
               "description": "Hours of silence before ARIA checks in (default 24)"
             }
           },
-          "required": ["enabled"]
+          "required": [
+            "enabled"
+          ]
         }
       }
     },
@@ -801,7 +898,10 @@
           "properties": {
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord"],
+              "enum": [
+                "whatsapp",
+                "discord"
+              ],
               "description": "Platform to use"
             },
             "contact_id": {
@@ -813,7 +913,11 @@
               "description": "The reason or goal for the message"
             }
           },
-          "required": ["platform", "contact_id", "context"]
+          "required": [
+            "platform",
+            "contact_id",
+            "context"
+          ]
         }
       }
     },
@@ -831,7 +935,10 @@
             },
             "platform": {
               "type": "string",
-              "enum": ["whatsapp", "discord"],
+              "enum": [
+                "whatsapp",
+                "discord"
+              ],
               "description": "The platform the message was received on"
             },
             "message_content": {
@@ -839,7 +946,11 @@
               "description": "The content of the message to relay to the user"
             }
           },
-          "required": ["contact_name", "platform", "message_content"]
+          "required": [
+            "contact_name",
+            "platform",
+            "message_content"
+          ]
         }
       }
     },
@@ -856,7 +967,28 @@
               "description": "Whether to clear the messages after retrieving them (default: true)"
             }
           },
-          "required": ["clear"]
+          "required": [
+            "clear"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "set_current_status",
+        "description": "Update the user's current status so the AI can inform contacts.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "The status description (e.g. 'Aze is on a coffee break')"
+            }
+          },
+          "required": [
+            "status"
+          ]
         }
       }
     }
