@@ -12,6 +12,10 @@ if not OLLAMA_API_KEY:
 
 OLLAMA_HOST = "http://localhost:11434"
 
+# NVIDIA Riva ASR Configuration
+NVIDIA_API_KEY = os.getenv('NVIDIA_API_KEY')
+NVIDIA_FUNCTION_ID = os.getenv('NVIDIA_FUNCTION_ID')
+
 # Spotify API Configuration
 SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')

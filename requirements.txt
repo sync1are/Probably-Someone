@@ -144,3 +144,4 @@ Werkzeug==3.1.8
 win32_setctime==1.2.0
 WMI==1.5.1
 wrapt==2.1.2
+keyboard

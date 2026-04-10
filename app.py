@@ -17,6 +17,7 @@ if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding != 'utf-8':
 if hasattr(sys.stderr, 'encoding') and sys.stderr.encoding != 'utf-8':
     sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 from src.core.audio_engine import AudioEngine, StreamingTextProcessor
+from src.core.asr_engine import ASREngine
 from src.tools.registry import execute_tool
 
 
@@ -60,6 +61,44 @@ def stream_response(response, audio_engine, is_code=False):
     cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', full_response, flags=re.DOTALL).strip()
 
     return cleaned
+
+
+def stream_and_reconstruct(response_stream, audio_engine):
+    """
+    Consumes a streaming LLM response, printing text live to the console,
+    sending text chunks to the TTS engine, and reconstructing the final
+    message dictionary containing both the complete text and any tool calls.
+    """
+    full_content = ""
+    tool_calls = []
+    processor = StreamingTextProcessor(audio_engine)
+    first_chunk = True
+
+    for chunk in response_stream:
+        msg = chunk.get('message', {})
+
+        # Accumulate tool calls if they exist in the chunk
+        if msg.get('tool_calls'):
+            tool_calls = msg['tool_calls']
+
+        content = msg.get('content', '')
+        if content:
+            if first_chunk:
+                print("\r\033[K🤖 AI: ", end="", flush=True)
+                first_chunk = False
+            print(content, end='', flush=True)
+            full_content += content
+            processor.process_chunk(content)
+
+    processor.flush()
+    if full_content:
+        print("\n")
+
+    return {
+        "role": "assistant",
+        "content": full_content,
+        "tool_calls": tool_calls if tool_calls else None
+    }
 
 
 def process_tool_calls(message, conversation_history, llm_client, tools, audio_engine):
@@ -226,6 +265,7 @@ def main():
     # Initialize components
     llm_client = LLMClient(backend=backend)
     audio_engine = AudioEngine()
+    asr_engine = ASREngine(hotkey='ctrl+shift')
     tools = load_tools()
 
     # Initialize messaging system
@@ -233,6 +273,8 @@ def main():
     from src.messaging.autonomy_engine import AutonomyEngine
     from src.tools.messaging_tools import start_messaging
 
+    # Start background services
+    asr_engine.start_background_listener()
     messaging_controller = MessagingController()
     autonomy_engine = AutonomyEngine(messaging_controller)
     autonomy_engine.start()
@@ -245,6 +287,7 @@ def main():
     conversation_history = [{"role": "system", "content": active_system_prompt}]
 
     print("🤖 ARIA Voice Assistant Started!")
+    print("🎙️ Hold [Ctrl + Shift] anytime to speak")
     print("📸 Screenshot tool enabled")
     print("🎵 Spotify controls enabled")
     print("🤖 Autonomous Messaging Mode active")
@@ -263,11 +306,11 @@ def main():
         while True:
             # ... (rest of the loop)
             user_input = input("You: ").strip()
-            
+
             if user_input.lower() in ['quit', 'exit', 'bye', 'q']:
                 print("👋 Goodbye!")
                 break
-            
+
             if not user_input:
                 continue
 
@@ -281,16 +324,15 @@ def main():
             })
 
             # --- TOOL-AWARE PATH (Ollama + NVIDIA) ---
-            # First call is stream=False so we can detect tool calls cleanly.
-            # For NVIDIA this means a short wait, but tools will work correctly.
+            # Call is stream=True so we print the text live.
             _t_start = time.time()
             print("⏳ AI is thinking...", end="\r", flush=True)
             try:
-                response = llm_client.chat(
+                response_stream = llm_client.chat(
                     model=DEFAULT_MODEL,
                     messages=conversation_history,
                     tools=tools,
-                    stream=False
+                    stream=True
                 )
             except KeyboardInterrupt:
                 print("\n[Interrupted]\n")
@@ -298,8 +340,10 @@ def main():
                 continue
 
             _t_first_token = time.time() - _t_start
-            message = response['message']
-            
+
+            # Consume the stream, print it live, and reconstruct the final message dict
+            message = stream_and_reconstruct(response_stream, audio_engine)
+
             # Handle tool calls in a ReAct loop
             loop_count = 0
             max_loops = 5
@@ -346,18 +390,11 @@ def main():
                     print("\n  [Continuing workflow...]")
 
             if not message.get('tool_calls') and loop_count == 0:
-                # Direct response, no tools used at all
-                def _fake_stream(content):
-                    words = content.split(" ")
-                    for i, word in enumerate(words):
-                        yield {"message": {"content": word + (" " if i < len(words) - 1 else "")}}
-
-                content = message.get("content", "")
-                print("\033[K", end="")  # Clear the thinking line
-                full_response = stream_response(_fake_stream(content), audio_engine)
+                # Direct response, no tools used at all.
+                # Text was already streamed and spoken live by stream_and_reconstruct above.
                 conversation_history.append({
                     'role': 'assistant',
-                    'content': full_response
+                    'content': message.get("content", "")
                 })
                 audio_engine.signal_done()
             
@@ -366,6 +403,7 @@ def main():
     
     finally:
         audio_engine.shutdown()
+        asr_engine.stop_background_listener()
 
         # Kill the background messaging processes cleanly when the app closes
         if messaging_controller:

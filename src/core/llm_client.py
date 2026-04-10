@@ -128,15 +128,29 @@ class LLMClient:
             }
 
     def _nvidia_stream_generator(self, completion):
-        """Yield content chunks, suppressing any <tool_call> XML blocks mid-stream."""
+        """Yield content chunks and accumulate tool calls if any."""
         import re
         buffer = ""
         in_tool_call = False
+        tool_calls_dict = {}
 
         for chunk in completion:
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
+
+            # Accumulate OpenAI-native tool calls deltas
+            if getattr(delta, "tool_calls", None):
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_dict:
+                        tool_calls_dict[idx] = {"name": "", "arguments": ""}
+                    if tc.function.name:
+                        tool_calls_dict[idx]["name"] += tc.function.name
+                    if tc.function.arguments:
+                        tool_calls_dict[idx]["arguments"] += tc.function.arguments
+                continue
+
             # Skip internal reasoning tokens
             if getattr(delta, "reasoning_content", None):
                 continue
@@ -169,3 +183,20 @@ class LLMClient:
         # Flush remainder
         if buffer and not in_tool_call:
             yield {"message": {"content": buffer}}
+
+        # If any native tool calls were accumulated, yield them at the very end
+        if tool_calls_dict:
+            formatted_tcs = []
+            for k in sorted(tool_calls_dict.keys()):
+                args_str = tool_calls_dict[k]["arguments"]
+                try:
+                    args = json.loads(args_str)
+                except json.JSONDecodeError:
+                    args = {}
+                formatted_tcs.append({
+                    "function": {
+                        "name": tool_calls_dict[k]["name"],
+                        "arguments": args
+                    }
+                })
+            yield {"message": {"content": "", "tool_calls": formatted_tcs}}

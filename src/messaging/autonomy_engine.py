@@ -85,25 +85,28 @@ class AutonomyEngine:
         for platform, contacts in history.items():
             for contact_id, data in contacts.items():
                 last_interaction = data.get("last_interaction", 0)
-                
+
                 # If conversation is stale and we haven't reached the daily limit
-                if (current_time - last_interaction > threshold_seconds and 
+                if (current_time - last_interaction > threshold_seconds and
                     self.proactive_sent_today.get(contact_id, 0) < self.max_proactive_per_day):
-                    
+
                     contact_name = data.get("name", "Unknown")
                     last_message = data.get("last_message", "nothing")
-                    
+
                     # Context for initiation
                     context = f"Following up after a while. Last we spoke, the user said: {last_message}"
-                    
-                    # This is where the magic happens
-                    await self.controller.initiate_conversation(
-                        platform=platform,
-                        contact_id=contact_id,
-                        contact_name=contact_name,
-                        context=context
-                    )
-                    
-                    # Track that we sent it
-                    self.proactive_sent_today[contact_id] = self.proactive_sent_today.get(contact_id, 0) + 1
+
                     print(f"[Autonomy Engine] Triggered proactive check-in for {contact_name}")
+                    # Track that we sent it BEFORE initiating to prevent infinite loops if it fails
+                    self.proactive_sent_today[contact_id] = self.proactive_sent_today.get(contact_id, 0) + 1
+
+                    # This is where the magic happens
+                    try:
+                        await self.controller.initiate_conversation(
+                            platform=platform,
+                            contact_id=contact_id,
+                            contact_name=contact_name,
+                            context=context
+                        )
+                    except Exception as e:
+                        print(f"[Autonomy Engine] Failed to send proactive message to {contact_name}: {e}")
