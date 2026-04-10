@@ -141,7 +141,7 @@ DISCORD_USER_TOKEN=your_discord_user_token
 
 ## Architecture
 
-- **Zero-Latency Streaming Engine** - Highly-optimized generator parsing instantly flushes AI response chunks directly to the UI and Text-to-Speech Engine *while* dynamically catching ReAct tool-calls, resulting in `0.0s` First-Token Latency from major models like Nemotron 120B.
+- **Zero-Latency Streaming Engine** - Highly-optimized generator parsing instantly flushes AI response chunks directly to the UI and Text-to-Speech Engine *while* dynamically catching ReAct tool-calls, resulting in `0.0s` First-Token Latency from major models like Nemotron 120B and on local Models via Ollama.
 - **Background ASR Subprocess** - Employs global keyboard hooking and Python subprocess buffering to pipe live, unbuffered `NVIDIA Riva` speech transcription bytes continuously to the console UI.
 - **ReAct Tool Chaining** - ARIA can automatically call multiple tools sequentially in a single turn (e.g., generate a file, read its path, then automatically open it in your browser).
 - **Dual AI Backends** - Seamlessly switch between zero-latency local models or massively scaled cloud models.
