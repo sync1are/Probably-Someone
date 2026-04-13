@@ -94,8 +94,10 @@ D:\VERISON 3\
 │
 ├── src/                       # Source code
 │   ├── core/                  # Core modules
-│   │   ├── llm_client.py      # Ollama & NVIDIA client wrapper
-│   │   └── audio_engine.py    # TTS and audio playback
+│   │   ├── llm_client.py      # Ollama, LM Studio & NVIDIA client wrapper
+│   │   ├── audio_engine.py    # Audio queueing and streaming processor
+│   │   ├── tts_server.py      # Isolated Kokoro TTS microservice daemon
+│   │   └── asr_engine.py      # NVIDIA Riva ASR dictation (if applicable)
 │   ├── tools/                 # Tool implementations
 │   ├── messaging/             # Messaging backend
 │   └── config.py              # Configuration
@@ -157,8 +159,9 @@ You can easily rewrite this section to change its name, tone, personality, or te
 ## Architecture
 
 - **Zero-Latency Streaming Engine** - Highly-optimized generator parsing instantly flushes AI response chunks directly to the UI and Text-to-Speech Engine *while* dynamically catching ReAct tool-calls, resulting in `0.0s` First-Token Latency from major models like Nemotron 120B and on local Models via Ollama.
-- **Background ASR Subprocess** - Employs global keyboard hooking and Python subprocess buffering to pipe live, unbuffered `NVIDIA Riva` speech transcription bytes continuously to the console UI.
+- **Microservice Audio Architecture** - Offloads heavy PyTorch Kokoro TTS generation to a dedicated local Flask background server (`tts_server.py`) to prevent blocking the Python GIL during concurrent multi-agent logic streams.
+- **Background ASR Subprocess** - Employs global keyboard hooking and Python subprocess buffering to pipe live, unbuffered speech transcription bytes continuously to the console UI.
 - **ReAct Tool Chaining** - ARIA can automatically call multiple tools sequentially in a single turn (e.g., generate a file, read its path, then automatically open it in your browser).
-- **Dual AI Backends** - Seamlessly switch between zero-latency local models or massively scaled cloud models.
-- **Modular Design & Tool Registry Pattern** - Clean separation of concerns making it easy to add new capabilities.
-- **Multithreaded Messaging Engine** - Non-blocking message polling ensuring your WhatsApp and Discord bots remain responsive dynamically.
+- **Triple AI Backends** - Seamlessly switch between zero-latency local models (Ollama), entirely custom/uncensored local models (LM Studio Drop-In), or massively scaled cloud models (NVIDIA NIM).
+- **Dynamic Schema Injection** - Actively intercepts and bridges user-friendly `tools.toml` definitions into ultra-strict OpenAI API specification payloads in memory.
+- **Multithreaded Messaging Engine** - Non-blocking message polling ensuring your WhatsApp and Discord bots remain fully responsive alongside the primary console.
