@@ -7,10 +7,10 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 ## Features
 
 - 🎙️ **Voice Output** - Natural TTS using Kokoro
-- 🎵 **Spotify Control** - Play, pause, skip, queue songs via voice
-- 💬 **Messaging Automation** - Auto-reply on WhatsApp & Discord
+- 🎵 **Spotify Control** - Play, pause, skip, queue songs via voice, okay specific songs, adjust volume, add to playlist, play a playlist,etc.
+- 💬 **Messaging Automation** - Auto-reply on WhatsApp & Discord with custom persona and status.
 - 🧠 **Autonomous Mode** - Proactive AI check-ins and autonomous conversational routing
-- 📧 **Gmail Integration** - AI can read your important unread emails
+- 📧 **Gmail Integration** - AI can read your important unread emails and summarise them to you.
 - 📸 **Screenshot Analysis** - AI can see and analyze your screen
 - 📋 **Clipboard Management** - "Summarize what I copied", copy AI responses
 - 🪟 **Window Context** - AI knows what app you're using
