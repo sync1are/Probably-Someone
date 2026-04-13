@@ -24,6 +24,7 @@ SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI', 'http://127.0.0.1:8888/
 # Model Configuration
 DEFAULT_MODEL = 'qwen3.5:2b'         # Ollama local model
 NVIDIA_MODEL  = 'nvidia/nemotron-3-super-120b-a12b'  # NVIDIA reasoning model
+LM_STUDIO_MODEL = 'local-model'      # LM Studio local model/any model loaded
 VISION_MODEL = 'gemma4:31b-cloud'
 
 # TTS Configuration
@@ -36,7 +37,7 @@ AUDIO_QUEUE_SIZE = 50
 TTS_BUFFER_THRESHOLD = 50
 
 # Tools Configuration
-TOOLS_FILE = 'tools.json'
+TOOLS_FILE = 'tools.toml'
 
 # System Prompt
 SYSTEM_PROMPT = """You are ARIA (Adaptive Reasoning Intelligence Assistant), a local AI assistant.

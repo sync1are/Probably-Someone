@@ -145,3 +145,5 @@ win32_setctime==1.2.0
 WMI==1.5.1
 wrapt==2.1.2
 keyboard
+
+toml==0.10.2

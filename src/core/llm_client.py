@@ -11,16 +11,18 @@ class LLMClient:
     def __init__(self, backend="ollama"):
         self.backend = backend.lower()
 
-        if self.backend == "nvidia":
+        if self.backend in ["nvidia", "lm_studio"]:
             from openai import OpenAI
-            self.nvidia_client = OpenAI(
-                base_url="https://integrate.api.nvidia.com/v1",
-                api_key=os.getenv('NVIDIA_API_KEY', '')
+            base_url = "https://integrate.api.nvidia.com/v1" if self.backend == "nvidia" else "http://localhost:1234/v1"
+            api_key = os.getenv('NVIDIA_API_KEY', '') if self.backend == "nvidia" else "lm-studio"
+            self.oai_client = OpenAI(
+                base_url=base_url,
+                api_key=api_key
             )
 
     def chat(self, model, messages, tools=None, stream=False):
         """Send a chat request to the LLM backend."""
-        if self.backend == "nvidia":
+        if self.backend in ["nvidia", "lm_studio"]:
             return self._nvidia_chat(model, messages, tools, stream)
 
         # think=False explicitly passed for ollama
@@ -98,7 +100,7 @@ class LLMClient:
         if tools:
             kwargs["tools"] = tools
 
-        completion = self.nvidia_client.chat.completions.create(**kwargs)
+        completion = self.oai_client.chat.completions.create(**kwargs)
 
         if stream:
             return self._nvidia_stream_generator(completion)

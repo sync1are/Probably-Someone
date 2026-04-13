@@ -4,11 +4,12 @@ Refactored modular architecture with Spotify integration
 """
 
 import json
+import toml
 import sys
 import codecs
 import time
 import re
-from src.config import SYSTEM_PROMPT, NVIDIA_SYSTEM_PROMPT, DEFAULT_MODEL, NVIDIA_MODEL, TOOLS_FILE
+from src.config import SYSTEM_PROMPT, NVIDIA_SYSTEM_PROMPT, DEFAULT_MODEL, NVIDIA_MODEL, LM_STUDIO_MODEL, TOOLS_FILE
 from src.core.llm_client import LLMClient
 
 # Set standard output encoding to utf-8 to prevent charmap errors in Windows
@@ -22,10 +23,15 @@ from src.tools.registry import execute_tool
 
 
 def load_tools():
-    """Load tool definitions from tools.json."""
-    with open(TOOLS_FILE, 'r') as f:
-        tools_data = json.load(f)
-        return tools_data['tools']
+    """Load tool definitions from tools.toml."""
+    with open(TOOLS_FILE, 'r', encoding='utf-8') as f:
+        tools_data = toml.load(f)
+        tools = tools_data.get('tools', [])
+        for t in tools:
+            if 'parameters' in t.get('function', {}):
+                if 'properties' not in t['function']['parameters']:
+                    t['function']['parameters']['properties'] = {}
+        return tools
 
 
 def stream_response(response, audio_engine, is_code=False):
@@ -250,13 +256,19 @@ def main():
     print("Please select your AI backend:")
     print("1. Ollama (Local - Default)")
     print("2. NVIDIA NIM (Cloud)")
+    print("3. LM Studio (Local)")
     
-    choice = input("\nEnter choice (1 or 2): ").strip()
+    choice = input("\nEnter choice (1, 2, or 3): ").strip()
     if choice == '2':
         backend = "nvidia"
         DEFAULT_MODEL = NVIDIA_MODEL
         active_system_prompt = NVIDIA_SYSTEM_PROMPT
         print(f"Selected NVIDIA NIM  ({NVIDIA_MODEL}).\n")
+    elif choice == '3':
+        backend = "lm_studio"
+        DEFAULT_MODEL = LM_STUDIO_MODEL
+        active_system_prompt = SYSTEM_PROMPT
+        print(f"Selected LM Studio ({LM_STUDIO_MODEL}).\n")
     else:
         backend = "ollama"
         active_system_prompt = SYSTEM_PROMPT
@@ -277,7 +289,6 @@ def main():
     asr_engine.start_background_listener()
     messaging_controller = MessagingController()
     autonomy_engine = AutonomyEngine(messaging_controller)
-    autonomy_engine.start()
 
     # Auto-start Discord and WhatsApp bridges in the background
     print("\n[Boot] Starting background messaging bridges...")
@@ -290,7 +301,6 @@ def main():
     print("🎙️ Hold [Ctrl + Shift] anytime to speak")
     print("📸 Screenshot tool enabled")
     print("🎵 Spotify controls enabled")
-    print("🤖 Autonomous Messaging Mode active")
     print("Type 'quit' or 'exit' to stop\n")
 
     # Check for pending messages on boot

@@ -96,10 +96,14 @@ class ResponseGenerator:
 
             # Allow the autonomous messaging AI to use tools (like store_user_message)
             # Load tools directly to avoid importing app.py in subprocess context
-            import json as _json
+            import toml as _toml
             from src.config import TOOLS_FILE
-            with open(TOOLS_FILE, 'r') as _f:
-                tools = _json.load(_f)['tools']
+            with open(TOOLS_FILE, 'r', encoding='utf-8') as _f:
+                tools = _toml.load(_f)['tools']
+                for t in tools:
+                    if 'parameters' in t.get('function', {}):
+                        if 'properties' not in t['function']['parameters']:
+                            t['function']['parameters']['properties'] = {}
 
             # First chat call, check if the LLM wants to use a tool
             response = self.llm_client.chat(

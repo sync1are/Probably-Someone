@@ -34,7 +34,7 @@ class AudioEngine:
             response = requests.post(
                 self.tts_server_url,
                 json={"text": "test", "voice": TTS_VOICE, "speed": TTS_SPEED},
-                timeout=10
+                timeout=120
             )
             if response.status_code == 200:
                 self.server_ready = True
@@ -93,7 +93,7 @@ class AudioEngine:
                             "voice": TTS_VOICE,
                             "speed": TTS_SPEED
                         },
-                        timeout=10
+                        timeout=120
                     )
 
                     if response.status_code == 200:

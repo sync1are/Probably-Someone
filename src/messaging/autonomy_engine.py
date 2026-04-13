@@ -86,8 +86,14 @@ class AutonomyEngine:
             for contact_id, data in contacts.items():
                 last_interaction = data.get("last_interaction", 0)
 
-                # If conversation is stale and we haven't reached the daily limit
-                if (current_time - last_interaction > threshold_seconds and
+                # Skip if we have no valid previous interaction
+                if last_interaction == 0:
+                    continue
+
+                time_since_last = current_time - last_interaction
+
+                # If conversation is stale but not ancient history (between 24h and 48h ago)
+                if (threshold_seconds < time_since_last <= threshold_seconds * 2 and
                     self.proactive_sent_today.get(contact_id, 0) < self.max_proactive_per_day):
 
                     contact_name = data.get("name", "Unknown")

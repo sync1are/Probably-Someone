@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import json
+import toml
 import traceback
 from datetime import datetime
 from typing import Dict, List, Tuple
@@ -279,8 +280,8 @@ class ARIATestSuite:
     def test_llm_tool_calling(self):
         """Test tool calling functionality."""
         def test_tools():
-            with open('tools.json', 'r') as f:
-                tools_data = json.load(f)
+            with open('tools.toml', 'r', encoding='utf-8') as f:
+                tools_data = toml.load(f)
                 tools = tools_data['tools']
 
             client = LLMClient()
@@ -483,8 +484,8 @@ class ARIATestSuite:
 
         def test_tool_with_llm():
             """Test LLM with tool calling and execution."""
-            with open('tools.json', 'r') as f:
-                tools_data = json.load(f)
+            with open('tools.toml', 'r', encoding='utf-8') as f:
+                tools_data = toml.load(f)
                 tools = tools_data['tools']
 
             client = LLMClient()
