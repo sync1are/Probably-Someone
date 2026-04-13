@@ -140,6 +140,20 @@ DISCORD_USER_TOKEN=your_discord_user_token
 - **Gmail:** Enable the **Gmail API** in Google Cloud Console, download the JSON as `credentials.json`. 
 - **WhatsApp:** `cd messaging/whatsapp_bridge` and `npm install`.
 
+## Configuration & Customization
+
+You can personalize the AI's behavior deeply by editing `src/config.py`.
+
+### Changing AI Models
+By default, the script targets specific models. You can change them inside `src/config.py`:
+- `DEFAULT_MODEL` (for Ollama): Change from `'qwen3.5:2b'` to your installed Ollama model (e.g. `'llama3:8b'`).
+- `NVIDIA_MODEL` (for Cloud): Change to any supported NVIDIA NIM model (e.g. `'meta/llama-3.1-70b-instruct'`).
+- `LM_STUDIO_MODEL` (for local drop-in): Typically `'local-model'`, but can be customized to match your chosen LM Studio loaded model profile.
+
+### Customizing the System Prompt
+ARIA's personality and rule-set are defined completely in the `SYSTEM_PROMPT` variable inside `src/config.py`. 
+You can easily rewrite this section to change its name, tone, personality, or tell it how you personally like it to respond (e.g., adding a sarcastic tone, keeping responses under 2 sentences, etc.). Make sure to keep the strict tool-calling formatting guidelines intact!
+
 ## Architecture
 
 - **Zero-Latency Streaming Engine** - Highly-optimized generator parsing instantly flushes AI response chunks directly to the UI and Text-to-Speech Engine *while* dynamically catching ReAct tool-calls, resulting in `0.0s` First-Token Latency from major models like Nemotron 120B and on local Models via Ollama.
