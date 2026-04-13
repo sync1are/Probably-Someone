@@ -156,6 +156,35 @@ By default, the script targets specific models. You can change them inside `src/
 ARIA's personality and rule-set are defined completely in the `SYSTEM_PROMPT` variable inside `src/config.py`. 
 You can easily rewrite this section to change its name, tone, personality, or tell it how you personally like it to respond (e.g., adding a sarcastic tone, keeping responses under 2 sentences, etc.). Make sure to keep the strict tool-calling formatting guidelines intact!
 
+### Managing & Adding Custom Tools
+ARIA is architected for massive extensibility. You can design entirely new tool-call pipelines and commands in seconds without ever touching the core LLM processing loop!
+
+**Step 1: Define the Tool Schema (`tools.toml`)**
+Open the `tools.toml` file. This file bridges your tools natively to the AI using an OpenAI-compatible function-calling schema, but formatted cleanly using TOML to drastically reduce token overhead. To grant the AI a new capability, append a new `[[tools]]` block:
+```toml
+[[tools]]
+type = "function"
+[tools.function]
+name = "my_custom_tool"
+description = "Calculates the hyperspace jump coordinates."
+[tools.function.parameters]
+type = "object"
+required = ["sector"]
+  [tools.function.parameters.properties.sector]
+  type = "string"
+  description = "The target galactic sector."
+```
+
+**Step 2: Write the Python Execution Logic (`src/tools/`)**
+Create or edit a Python script inside the `src/tools/` directory. The python function name **must exactly match** the `name` defined in your TOML schema!
+```python
+# Example: src/tools/hyperspace_tools.py
+def my_custom_tool(sector):
+    # Your custom Python code goes here
+    return f"Jump coordinates locked for sector {sector}!"
+```
+**That's it!** The engine leverages a dynamic registry pattern. When ARIA boots, she autonomously traverses `src/tools/`, perfectly binds your Python functions against your TOML schemas, and instantly integrates them into her global capabilities map.
+
 ## Architecture
 
 - **Zero-Latency Streaming Engine** - Highly-optimized generator parsing instantly flushes AI response chunks directly to the UI and Text-to-Speech Engine *while* dynamically catching ReAct tool-calls, resulting in `0.0s` First-Token Latency from major models like Nemotron 120B and on local Models via Ollama.
