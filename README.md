@@ -9,7 +9,7 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 - 🎙️ **Voice Output** - Natural TTS using Kokoro
 - 🎵 **Spotify Control** - Play, pause, skip, queue songs via voice, okay specific songs, adjust volume, add to playlist, play a playlist,etc.
 - 💬 **Messaging Automation** - Auto-reply on WhatsApp & Discord with custom persona and status.
-- 🧠 **Autonomous Mode** - Proactive AI check-ins and autonomous conversational routing
+- 🧠 **Autonomous Mode** - Proactive AI check-ins and autonomous conversational routing with multiple user context awareness. Stores summary of interaction and updates the user in important details.
 - 📧 **Gmail Integration** - AI can read your important unread emails and summarise them to you.
 - 📸 **Screenshot Analysis** - AI can see and analyze your screen
 - 📋 **Clipboard Management** - "Summarize what I copied", copy AI responses
@@ -55,6 +55,7 @@ python start_messaging.py
 ### Robust Autonomous Messaging
 - **"Setup WhatsApp"** - Connect WhatsApp with QR code authentication with zero HTTP 404 sync issues.
 - **"Setup Discord"** - Configure Discord bot with user token. Background DM polling ensures fluid interactions.
+- **"Context Awareness"** - Multiple user context awareness.
 - **"Start messaging"** - Activate auto-reply for both platforms. Cross-process state keeps the central AI aware of all threads.
 - **"Add [name] to whitelist"** - Allow auto-reply for specific contacts.
 - **"Send [contact] a message"** - Proactive messaging via voice.
