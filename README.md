@@ -84,31 +84,51 @@ python start_messaging.py
 
 ## Project Structure
 
-```
-D:\VERISON 3\
-├── app.py                     # Main ARIA entry point
-├── README.md                  # This file
-├── tools.toml                 # TOML-based Tool definitions (Token friendly)
+```text
+ARIA/
+├── app.py                     # Main Console UI & ARIA Entry Point
+├── tools.toml                 # Massive TOML Schema registry for OpenAI API bridging
+├── README.md                  # Project documentation
 ├── requirements.txt           # Python dependencies
-├── .env                       # API keys and configuration
+├── .env                       # API keys and secured configurations
 │
-├── src/                       # Source code
-│   ├── core/                  # Core modules
-│   │   ├── llm_client.py      # Ollama, LM Studio & NVIDIA client wrapper
-│   │   ├── audio_engine.py    # Audio queueing and streaming processor
-│   │   ├── tts_server.py      # Isolated Kokoro TTS microservice daemon
-│   │   └── asr_engine.py      # NVIDIA Riva ASR dictation (if applicable)
-│   ├── tools/                 # Tool implementations
-│   ├── messaging/             # Messaging backend
-│   └── config.py              # Configuration
+├── src/                       # Application Source Code
+│   ├── config.py              # Central System Prompts & LLM Model selection
+│   │
+│   ├── core/                  # Core Cognitive and Sensory Modules
+│   │   ├── llm_client.py      # Abstraction for Ollama, LM Studio, NVIDIA logic
+│   │   ├── audio_engine.py    # Thread-safe audio queuing & streaming processor
+│   │   ├── tts_server.py      # Isolated Kokoro PyTorch TTS Flask microservice
+│   │   └── asr_engine.py      # NVIDIA Riva Subprocess dictation (Push-to-Talk)
+│   │
+│   ├── tools/                 # Physical Tool Action Implementations
+│   │   ├── discord_tools.py   # Discord interaction tools
+│   │   ├── file_tools.py      # File IO & editor context tools
+│   │   ├── gmail_tools.py     # Gmail API authentication tools 
+│   │   ├── launcher_tools.py  # Local executable & window launching 
+│   │   ├── messaging_tools.py # Inter-process messaging status toggles
+│   │   ├── news_tools.py      # RSS feed parsing & localized news
+│   │   ├── spotify_tools.py   # High-level Spotipy device controls
+│   │   ├── system_tools.py    # Windows system volume & brightness controls
+│   │   ├── vscode_tools.py    # VSCode active context extraction
+│   │   └── web_tools.py       # Live HTTP Web scraping and summarizing
+│   │
+│   └── messaging/             # Autonomous Background Brain Logic
+│       ├── autonomy_engine.py # The background proactive AI check-in loop
+│       ├── controller.py      # Cross-platform message routing logic
+│       ├── http_server.py     # Flask backend for the Node.js bridge to call
+│       └── response_generator.py # Independent hidden LLM worker for stealth replies
 │
-├── messaging/                 # Messaging applications
-│   ├── discord_bot.py         # Discord bot
-│   ├── start_messaging.py     # Messaging launcher
-│   └── whatsapp_bridge/       # WhatsApp Node.js bridge
+├── messaging/                 # Bridge Status & Async Memory State
+│   ├── start_messaging.py     # Entry point for the Background Messaging Engine
+│   ├── discord_bot.py         # Discord Python wrapper
+│   ├── *.json                 # Cross-process async message queues & whitelists
+│   │
+│   └── whatsapp_bridge/       # WhatsApp Node.js backend Client
+│       ├── bridge.js          # WhatsApp Web JS Puppeteer logic
+│       └── package.json       # Node dependencies
 │
-├── tests/                     # Testing suite
-└── docs/                      # Extensive Documentation folder
+└── tests/                     # Suite for robust backend regression testing
 ```
 
 ## Setup
