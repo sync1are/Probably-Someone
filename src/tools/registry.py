@@ -8,7 +8,7 @@ from src.tools.system_tools import (
     set_clipboard,
     get_active_window
 )
-from src.tools.web_tools import scrape_webpage
+from src.tools.web_tools import scrape_webpage, search_web
 from src.tools.launcher_tools import open_application
 from src.tools.display_tools import (
     set_system_brightness,
@@ -84,6 +84,7 @@ TOOL_HANDLERS = {
 
     # Web/News tools
     "scrape_webpage": scrape_webpage,
+    "search_web": search_web,
     "get_latest_news": get_latest_news,
 
     # File tools

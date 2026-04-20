@@ -6,8 +6,17 @@ Opens applications and websites by name using Windows shell execution and regist
 import os
 import subprocess
 import webbrowser
+import sys
+import time
 from typing import Dict, Any
 from pathlib import Path
+
+# Try to import pyautogui, gracefully fallback if not installed or failing
+try:
+    import pyautogui
+    PYAUTOGUI_AVAILABLE = True
+except ImportError:
+    PYAUTOGUI_AVAILABLE = False
 
 
 # Common application aliases and their executable names
@@ -123,26 +132,63 @@ def open_application(app_name: str) -> Dict[str, Any]:
                 }
 
         # Look up executable name from aliases
-        executable = COMMON_APPS.get(app_lower, app_lower)
+        executable = COMMON_APPS.get(app_lower)
 
         # On Windows, os.startfile opens the default associated program
         # or the executable if it's in the system PATH
         if os.name == 'nt':
-            if app_lower == "settings":
-                os.startfile(executable)
-                return {"success": True, "message": "Opened Windows Settings."}
-            else:
-                try:
-                    # Attempt to run via subprocess (more reliable for some apps)
-                    subprocess.Popen(executable, shell=True)
-                except FileNotFoundError:
-                    # Fallback to startfile
+            success = False
+            if executable:
+                if app_lower == "settings":
                     os.startfile(executable)
+                    return {"success": True, "message": "Opened Windows Settings."}
+                else:
+                    try:
+                        # Attempt to run via subprocess (more reliable for some apps if in PATH)
+                        # We use stdout/stderr redirect to check if it actually ran successfully
+                        result = subprocess.run(executable, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        if result.returncode == 0:
+                            success = True
+                        else:
+                            success = False
+                    except Exception:
+                        success = False
+
+                    if not success:
+                        try:
+                            # Fallback to startfile
+                            os.startfile(executable)
+                            success = True
+                        except Exception:
+                            success = False
+
+            if not success:
+                # If not a known app, or known app failed to start, fallback to simulating Windows Start Menu search
+                if PYAUTOGUI_AVAILABLE:
+                    pyautogui.press('win')
+                    time.sleep(0.5)
+                    pyautogui.write(app_name, interval=0.05)
+                    time.sleep(1.0)
+                    pyautogui.press('enter')
+
+                    return {
+                        "success": True,
+                        "message": f"Used Windows search to open '{app_name}'.",
+                        "data": {"app": app_name, "method": "windows_search"}
+                    }
+                else:
+                    # Original fallback behavior if pyautogui isn't available
+                    executable = executable or app_lower
+                    try:
+                        subprocess.Popen(executable, shell=True)
+                    except FileNotFoundError:
+                        os.startfile(executable)
 
         # Non-Windows systems (Linux/Mac fallback)
         else:
+            executable = executable or app_lower
             if sys.platform == 'darwin':
-                subprocess.Popen(['open', '-a', app_name])
+                subprocess.Popen(['open', '-a', executable])
             else:
                 subprocess.Popen([executable])
 

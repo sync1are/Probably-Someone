@@ -15,6 +15,24 @@ def get_spotify_client():
     ))
 
 
+def get_target_device_id(sp):
+    """Get the active device ID, or the first available device if none are active."""
+    try:
+        devices = sp.devices()
+        if not devices or not devices.get('devices'):
+            return None
+            
+        # Prioritize an active device if one exists
+        for device in devices['devices']:
+            if device.get('is_active'):
+                return device['id']
+                
+        # If no active device, fallback to the first available (usually the last active one)
+        return devices['devices'][0]['id']
+    except Exception:
+        return None
+
+
 def spotify_play(query=None, content_type="track"):
     """
     Play a specific song, artist, playlist, or album, or resume playback.
@@ -47,35 +65,35 @@ def spotify_play(query=None, content_type="track"):
 
             # Search for the content
             results = sp.search(q=search_query, limit=1, type=content_type)
+            device_id = get_target_device_id(sp)
             
             if content_type == 'track' and results['tracks']['items']:
                 track = results['tracks']['items'][0]
-                sp.start_playback(uris=[track['uri']])
+                sp.start_playback(device_id=device_id, uris=[track['uri']])
                 return {
                     "success": True,
                     "message": f"Playing '{track['name']}' by {track['artists'][0]['name']}"
                 }
             elif content_type == 'playlist' and results['playlists']['items']:
                 playlist = results['playlists']['items'][0]
-                sp.start_playback(context_uri=playlist['uri'])
+                sp.start_playback(device_id=device_id, context_uri=playlist['uri'])
                 return {
                     "success": True,
                     "message": f"Playing playlist '{playlist['name']}'"
                 }
             elif content_type == 'album' and results['albums']['items']:
                 album = results['albums']['items'][0]
-                sp.start_playback(context_uri=album['uri'])
+                sp.start_playback(device_id=device_id, context_uri=album['uri'])
                 return {
                     "success": True,
                     "message": f"Playing album '{album['name']}' by {album['artists'][0]['name']}"
                 }
             elif content_type == 'artist' and results['artists']['items']:
                 artist = results['artists']['items'][0]
-                # Get artist's top tracks
                 top_tracks = sp.artist_top_tracks(artist['id'])
                 if top_tracks['tracks']:
                     track_uris = [track['uri'] for track in top_tracks['tracks'][:10]]
-                    sp.start_playback(uris=track_uris)
+                    sp.start_playback(device_id=device_id, uris=track_uris)
                     return {
                         "success": True,
                         "message": f"Playing top tracks from {artist['name']}"
@@ -84,7 +102,8 @@ def spotify_play(query=None, content_type="track"):
             return {"success": False, "error": f"No {content_type} found for '{query}'"}
         else:
             # Resume current playback
-            sp.start_playback()
+            device_id = get_target_device_id(sp)
+            sp.start_playback(device_id=device_id)
             return {"success": True, "message": "Resumed playback"}
     except Exception as e:
         return {"success": False, "error": str(e)}

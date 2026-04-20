@@ -2,6 +2,32 @@
 
 import requests
 from bs4 import BeautifulSoup
+import webbrowser
+import urllib.parse
+
+
+def search_web(query: str, search_type: str = "general") -> dict:
+    """
+    Search the web by opening the default browser to a search engine.
+
+    Args:
+        query (str): The search query
+        search_type (str): "general" for normal search, "image" for image search
+
+    Returns:
+        dict: Success status
+    """
+    try:
+        encoded_query = urllib.parse.quote_plus(query)
+        if search_type.lower() == "image":
+            url = f"https://www.google.com/search?tbm=isch&q={encoded_query}"
+        else:
+            url = f"https://www.google.com/search?q={encoded_query}"
+
+        webbrowser.open(url)
+        return {"success": True, "message": f"Opened browser to search for '{query}'"}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to open browser: {str(e)}"}
 
 
 def scrape_webpage(url, extract_links=False):

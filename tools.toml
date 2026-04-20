@@ -2,6 +2,23 @@
 type = "function"
 
 [tools.function]
+name = "search_web"
+description = "Search the web by opening the default browser. Use when the user asks to search for something, look something up, or see images of something."
+[tools.function.parameters]
+type = "object"
+required = [ "query",]
+[tools.function.parameters.properties.query]
+type = "string"
+description = "The search query"
+[tools.function.parameters.properties.search_type]
+type = "string"
+enum = [ "general", "image",]
+description = "Whether to do a general web search or an image search"
+default = "general"
+[[tools]]
+type = "function"
+
+[tools.function]
 name = "set_system_volume"
 description = "Sets the system audio master volume. Use when user asks 'set volume to 50%', 'volume max', etc."
 [tools.function.parameters]

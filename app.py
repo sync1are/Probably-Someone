@@ -63,8 +63,9 @@ def stream_response(response, audio_engine, is_code=False):
     processor.flush()
 
     # Strip any raw XML tool_call tags the model may have leaked into its text response
-    # e.g. <tool_call><function=open_file>...</tool_call>
-    cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', full_response, flags=re.DOTALL).strip()
+    cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', full_response, flags=re.DOTALL)
+    cleaned = re.sub(r'<?function=.*?(?:</tool_call>|</function>)', '', cleaned, flags=re.DOTALL)
+    cleaned = cleaned.strip()
 
     return cleaned
 
@@ -100,9 +101,14 @@ def stream_and_reconstruct(response_stream, audio_engine):
     if full_content:
         print("\n")
 
+    cleaned_content = full_content
+    cleaned_content = re.sub(r'<tool_call>.*?</tool_call>', '', cleaned_content, flags=re.DOTALL)
+    cleaned_content = re.sub(r'<?function=.*?(?:</tool_call>|</function>)', '', cleaned_content, flags=re.DOTALL)
+    cleaned_content = cleaned_content.strip()
+
     return {
         "role": "assistant",
-        "content": full_content,
+        "content": cleaned_content,
         "tool_calls": tool_calls if tool_calls else None
     }
 
@@ -150,7 +156,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                             prev_path = prev_res['data']['filepath']
                             # Look for the filename inside the arguments and replace it with the path
                             for key, val in tool_args.items():
-                                if isinstance(val, str) and val in prev_path:
+                                if isinstance(val, str) and len(val) > 2 and val in prev_path:
                                     # If the argument is just "index.html" but the full path is "C:\...\index.html", swap it!
                                     tool_args[key] = prev_path
                     except Exception:

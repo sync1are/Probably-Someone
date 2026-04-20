@@ -76,7 +76,25 @@ class LLMClient:
                 tool_call_id = last_tool_call_ids.pop(0) if last_tool_call_ids else "call_0"
                 msg['tool_call_id'] = tool_call_id
 
-            msg.pop('images', None)
+            images = msg.pop('images', None)
+            if images and isinstance(images, list):
+                # Convert standard content to a list of dicts for OpenAI vision format
+                original_content = msg.get('content', '')
+                content_list = []
+                if original_content:
+                    content_list.append({"type": "text", "text": original_content})
+
+                # Add each base64 image
+                for img in images:
+                    content_list.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{img}"
+                        }
+                    })
+
+                msg['content'] = content_list
+
             prepared.append(msg)
 
         return prepared
