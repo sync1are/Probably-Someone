@@ -393,6 +393,124 @@ description = "Get the name, artist, and album of the currently playing track. U
 [tools.function.parameters]
 type = "object"
 required = []
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "get_learned_search_url"
+description = "Check if ARIA has previously learned the search URL structure for a specific domain. ALWAYS try this BEFORE attempting manual visual search (take_screenshot + click_at) on an unknown website. If this returns a URL, instantly use navigate_browser with it."
+[tools.function.parameters]
+type = "object"
+required = ["domain", "query"]
+  [tools.function.parameters.properties.domain]
+  type = "string"
+  description = "The root domain to check, e.g. 'imdb.com' or 'amazon.com'."
+  [tools.function.parameters.properties.query]
+  type = "string"
+  description = "The search query the user wants to execute."
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "save_search_template"
+description = "Permanently learn a website's search URL structure so you can skip visual manual searching next time. Call this AFTER you successfully complete a manual visual search on an unknown website and land on the results page. You MUST use get_current_url to read the results URL, replace the actual search query word with the exact string '{query}', and save it."
+[tools.function.parameters]
+type = "object"
+required = ["domain", "url_template"]
+  [tools.function.parameters.properties.domain]
+  type = "string"
+  description = "The root domain, e.g. 'imdb.com' or 'amazon.com'."
+  [tools.function.parameters.properties.url_template]
+  type = "string"
+  description = "The results URL you just landed on, but with the specific search term replaced by the exact literal string '{query}'. Example: 'https://www.imdb.com/find/?q={query}'"
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "navigate_browser"
+description = "Navigate the current browser tab to any URL instantly via CDP. ALWAYS prefer this over open_application for web tasks — it is faster, requires no new window, and works for any URL the LLM can construct. Examples: search Gmail → navigate_browser('https://mail.google.com/mail/u/0/#search/query'), search YouTube → navigate_browser('https://youtube.com/results?search_query=mrbeast'), search Pinterest → navigate_browser('https://pinterest.com/search/pins/?q=matching+pfp'). If Edge is not open, it will launch it automatically."
+[tools.function.parameters]
+type = "object"
+required = ["url"]
+  [tools.function.parameters.properties.url]
+  type = "string"
+  description = "The full URL to navigate to. The LLM should construct this dynamically based on the task (e.g. search URLs, direct page links)."
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "get_current_url"
+description = "Get the URL and title of the currently open browser tab. Use this to check what page is loaded before deciding next steps."
+[tools.function.parameters]
+type = "object"
+required = []
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "click_at"
+description = "Click at a pixel coordinate read from a take_screenshot image. Always pass the width and height returned by take_screenshot as image_width and image_height so coordinates scale correctly to real screen resolution. Do NOT use this after take_som_screenshot — use click_element instead."
+[tools.function.parameters]
+type = "object"
+required = ["x", "y"]
+  [tools.function.parameters.properties.x]
+  type = "integer"
+  description = "Horizontal pixel coordinate."
+  [tools.function.parameters.properties.y]
+  type = "integer"
+  description = "Vertical pixel coordinate."
+  [tools.function.parameters.properties.button]
+  type = "string"
+  description = "Mouse button to use. Default: left."
+  [tools.function.parameters.properties.clicks]
+  type = "integer"
+  description = "Number of clicks. Default: 1."
+  [tools.function.parameters.properties.image_width]
+  type = "integer"
+  description = "Width of the screenshot image the coordinates were read from. Default: 1280."
+  [tools.function.parameters.properties.image_height]
+  type = "integer"
+  description = "Height of the screenshot image the coordinates were read from. Default: 720."
+
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "scroll"
+description = "Scroll the active window vertically. Use a negative amount (e.g. -500) to scroll down the page, and a positive amount (e.g. 500) to scroll up."
+[tools.function.parameters]
+type = "object"
+required = ["amount"]
+  [tools.function.parameters.properties.amount]
+  type = "integer"
+  description = "The amount to scroll. Typical values are -500 (down) or 500 (up)."
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "type_text"
+description = "Type a string of text into the currently focused input field. Use this after clicking a text box to enter search queries, URLs, or any other input."
+[tools.function.parameters]
+type = "object"
+required = ["text"]
+  [tools.function.parameters.properties.text]
+  type = "string"
+  description = "The text to type."
+  [tools.function.parameters.properties.interval]
+  type = "number"
+  description = "Time to wait between key presses. Default: 0.04."
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "press_key"
+description = "Press a single keyboard key such as 'enter', 'tab', or 'escape'. Use this to submit forms or confirm actions after typing."
+[tools.function.parameters]
+type = "object"
+required = ["key"]
+  [tools.function.parameters.properties.key]
+  type = "string"
+  description = "The key to press."
 [[tools]]
 type = "function"
 
@@ -645,3 +763,28 @@ required = [ "status",]
 [tools.function.parameters.properties.status]
 type = "string"
 description = "The status description (e.g. 'Aze is on a coffee break')"
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "take_som_screenshot"
+description = "Take a screenshot with numbered red bounding boxes drawn over every interactive UI element (buttons, inputs, links, list items, etc.) in the focused window. Returns the annotated image and a map of { number -> element label }. Use this instead of take_screenshot when you need to click something — it eliminates coordinate guessing entirely. After calling this, use click_element to interact with elements by number."
+[tools.function.parameters]
+type = "object"
+required = []
+  [tools.function.parameters.properties.max_elements]
+  type = "integer"
+  description = "Maximum number of elements to label. Default is 40. Lower this if the screenshot feels cluttered."
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "click_element"
+description = "Click a UI element by its number from the most recent take_som_screenshot call. This is the preferred way to click anything after a SoM screenshot — do NOT use click_at with guessed coordinates when a SoM map is available. The element map is reset every time take_som_screenshot is called, so if the screen has changed, take a fresh SoM screenshot first."
+[tools.function.parameters]
+type = "object"
+required = ["element_id"]
+  [tools.function.parameters.properties.element_id]
+  type = "integer"
+  description = "The number shown in the red badge on the annotated screenshot."
+

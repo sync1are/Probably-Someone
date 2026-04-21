@@ -24,8 +24,9 @@ def search_web(query: str, search_type: str = "general") -> dict:
         else:
             url = f"https://www.google.com/search?q={encoded_query}"
 
-        webbrowser.open(url)
-        return {"success": True, "message": f"Opened browser to search for '{query}'"}
+        from src.tools.launcher_tools import launch_edge
+        launch_edge(url)
+        return {"success": True, "message": f"Opened Edge to search for '{query}' with debugging enabled."}
     except Exception as e:
         return {"success": False, "error": f"Failed to open browser: {str(e)}"}
 

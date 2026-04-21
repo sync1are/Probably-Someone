@@ -19,6 +19,35 @@ except ImportError:
     PYAUTOGUI_AVAILABLE = False
 
 
+def get_edge_path():
+    """Find the full path to msedge.exe from known install locations."""
+    import shutil
+    # Try PATH first
+    path = shutil.which("msedge.exe") or shutil.which("msedge")
+    if path:
+        return path
+    # Known default install locations
+    candidates = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return "msedge.exe"  # Last resort, let it fail naturally
+
+
+def launch_edge(url=None):
+    """Launch Edge with required CDP flags. Optionally open a URL."""
+    edge = get_edge_path()
+    args = [edge, "--remote-debugging-port=9222", "--remote-allow-origins=*"]
+    if url:
+        args.append(url)
+    subprocess.Popen(args)
+
+
+
 # Common application aliases and their executable names
 COMMON_APPS = {
     # Browsers
@@ -64,13 +93,42 @@ COMMON_APPS = {
 
 # Common websites for URL resolution
 COMMON_WEBSITES = {
+    # Social Media
     "youtube": "https://youtube.com",
+    "pinterest": "https://pinterest.com",
+    "reddit": "https://reddit.com",
+    "twitter": "https://twitter.com",
+    "x": "https://twitter.com",
+    "instagram": "https://instagram.com",
+    "facebook": "https://facebook.com",
+    "tiktok": "https://tiktok.com",
+    "linkedin": "https://linkedin.com",
+    "snapchat": "https://snapchat.com",
+    # Search / Productivity
     "google": "https://google.com",
     "gmail": "https://mail.google.com",
+    "google drive": "https://drive.google.com",
+    "google docs": "https://docs.google.com",
+    "google sheets": "https://sheets.google.com",
+    "google slides": "https://slides.google.com",
+    # Dev / Tech
     "github": "https://github.com",
+    "stackoverflow": "https://stackoverflow.com",
+    "stack overflow": "https://stackoverflow.com",
+    # AI
     "chatgpt": "https://chat.openai.com",
-    "reddit": "https://reddit.com",
+    "openai": "https://openai.com",
+    "claude": "https://claude.ai",
+    "perplexity": "https://perplexity.ai",
+    # Entertainment
     "netflix": "https://netflix.com",
+    "twitch": "https://twitch.tv",
+    "spotify": "https://open.spotify.com",
+    "disney plus": "https://disneyplus.com",
+    "disneyplus": "https://disneyplus.com",
+    # Shopping
+    "amazon": "https://amazon.com",
+    "ebay": "https://ebay.com",
 }
 
 
@@ -87,6 +145,16 @@ def open_application(app_name: str) -> Dict[str, Any]:
     app_lower = app_name.lower().strip()
 
     try:
+        # Intercept browser requests to forcefully append the remote debugging flag
+        if app_lower in ["edge", "microsoft edge", "chrome", "google chrome", "brave"]:
+            # Route all browser requests through launch_edge (uses full path + CDP flags)
+            launch_edge()
+            return {
+                "success": True,
+                "message": f"Successfully launched {app_name} with remote debugging enabled.",
+                "data": {"app": app_name}
+            }
+
         # Check if it's an exact file or directory path that exists on the hard drive
         if os.path.exists(app_name):
             if os.name == 'nt':
@@ -109,10 +177,10 @@ def open_application(app_name: str) -> Dict[str, Any]:
         # Check if it's a known website alias first
         if app_lower in COMMON_WEBSITES:
             url = COMMON_WEBSITES[app_lower]
-            webbrowser.open(url)
+            launch_edge(url)
             return {
                 "success": True,
-                "message": f"Opened {app_name} website in your browser."
+                "message": f"Opened {app_name} website in Edge with debugging port."
             }
 
         # Handle explicit websites (e.g., "open google.com")
@@ -125,10 +193,10 @@ def open_application(app_name: str) -> Dict[str, Any]:
                 pass
             else:
                 url = app_lower if app_lower.startswith("http") else f"https://{app_lower}"
-                webbrowser.open(url)
+                launch_edge(url)
                 return {
                     "success": True,
-                    "message": f"Opened website: {url}"
+                    "message": f"Opened website: {url} in Edge with debugging port."
                 }
 
         # Look up executable name from aliases
@@ -146,11 +214,9 @@ def open_application(app_name: str) -> Dict[str, Any]:
                     try:
                         # Attempt to run via subprocess (more reliable for some apps if in PATH)
                         # We use stdout/stderr redirect to check if it actually ran successfully
-                        result = subprocess.run(executable, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                        if result.returncode == 0:
-                            success = True
-                        else:
-                            success = False
+                        # Use Popen instead of run to avoid blocking
+                        process = subprocess.Popen(executable, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        success = True
                     except Exception:
                         success = False
 

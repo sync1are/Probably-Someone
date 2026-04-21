@@ -18,7 +18,9 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 - 📰 **News Integration** - Ask for the latest global or localized news headlines
 - 🌍 **Translation** - Instantly translate multi-lingual text and queries
 - 🌐 **Web Scraping** - "Summarize this article [URL]"
-- 🤖 **LLM Integration** - Powered by local **Ollama API**, local **LM Studio**, or secure cloud inference via **NVIDIA NIM (Nemotron 120B)**.
+- ⚡ **Direct CDP Browser Control** - Instant, tab-in-place navigation bypassing manual UI clicks
+- 🧠 **Self-Learning Browser System** - ARIA permanently learns website search schemas and URLs and saves them locally, getting infinitely faster over time
+- 🤖 **Hybrid LLM Architecture** - Uses a local model (LM Studio/Ollama) as the "Tool Planner" to handle rapid-fire actions without hitting rate limits, while NVIDIA NIM handles heavy reasoning and natural language.
 
 ## Quick Start
 
@@ -36,10 +38,14 @@ python start_messaging.py
 
 ## New Features 🚀
 
-### Triple AI Backend Support (NVIDIA NIM, LM Studio, Ollama)
+### Hybrid AI Architecture & Rate-Limit Evasion
 - Choose flexibly between local backends (**Ollama** or **LM Studio**) or secure cloud inference (**NVIDIA NIM**).
-- Uses the bleeding-edge Nemotron 120B reasoning model for deep workflows, or your favorite local open-source models with LM Studio's OpenAI-compatible drop-in architecture.
+- When using Cloud APIs (NVIDIA), ARIA automatically routes high-frequency tool loops (clicking, scrolling, typing) to your Local LLM. This **prevents API Rate Limits (429s)** and saves money, reserving the heavy cloud model strictly for final natural language generation.
 - Zero-leakage streaming response guarantees tool-calls never clutter your terminal interface.
+
+### Self-Learning Web Control
+- **Direct CDP Navigation**: The `navigate_browser` tool bypasses the standard Windows UI and interacts directly with the browser's DevTools protocol for instantaneous, 0-latency page loading.
+- **Dynamic URL Memory**: When you ask ARIA to search an unknown website, it does so visually. Once successful, it extracts the URL query structure and saves it to a local `learned_urls.toml` database. The next time you ask for that website, it uses the direct URL instantly, meaning ARIA actually learns and gets faster the more you use it!
 
 ### Terminal Chatbot
 - Interactive rich terminal loop processing natural language and multi-turn context seamlessly.

@@ -6,8 +6,16 @@ from src.tools.system_tools import (
     take_screenshot,
     get_clipboard,
     set_clipboard,
-    get_active_window
+    get_active_window,
+    click_at,
+    type_text,
+    press_key,
+    scroll,
+    navigate_browser,
+    get_current_url
 )
+from src.tools.learning_tools import save_search_template, get_learned_search_url
+from src.tools.som_tools import take_som_screenshot, click_element
 from src.tools.web_tools import scrape_webpage, search_web
 from src.tools.launcher_tools import open_application
 from src.tools.display_tools import (
@@ -81,6 +89,18 @@ TOOL_HANDLERS = {
     "get_clipboard": get_clipboard,
     "set_clipboard": set_clipboard,
     "get_active_window": get_active_window,
+    "click_at": click_at,
+    "type_text": type_text,
+    "press_key": press_key,
+    "scroll": scroll,
+    "navigate_browser": navigate_browser,
+    "get_current_url": get_current_url,
+    "take_som_screenshot": take_som_screenshot,
+    "click_element": click_element,
+
+    # Learning Tools
+    "save_search_template": save_search_template,
+    "get_learned_search_url": get_learned_search_url,
 
     # Web/News tools
     "scrape_webpage": scrape_webpage,

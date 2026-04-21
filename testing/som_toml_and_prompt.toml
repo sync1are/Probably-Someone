@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Append these two blocks to your tools.toml
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "take_som_screenshot"
+description = "Take a screenshot with numbered red bounding boxes drawn over every interactive UI element (buttons, inputs, links, list items, etc.) in the focused window. Returns the annotated image and a map of { number -> element label }. Use this instead of take_screenshot when you need to click something — it eliminates coordinate guessing entirely. After calling this, use click_element to interact with elements by number."
+[tools.function.parameters]
+type = "object"
+required = []
+  [tools.function.parameters.properties.max_elements]
+  type = "integer"
+  description = "Maximum number of elements to label. Default is 40. Lower this if the screenshot feels cluttered."
+
+[[tools]]
+type = "function"
+[tools.function]
+name = "click_element"
+description = "Click a UI element by its number from the most recent take_som_screenshot call. This is the preferred way to click anything after a SoM screenshot — do NOT use click_at with guessed coordinates when a SoM map is available. The element map is reset every time take_som_screenshot is called, so if the screen has changed, take a fresh SoM screenshot first."
+[tools.function.parameters]
+type = "object"
+required = ["element_id"]
+  [tools.function.parameters.properties.element_id]
+  type = "integer"
+  description = "The number shown in the red badge on the annotated screenshot."
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Append this block to SYSTEM_PROMPT in src/config.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+"""
+## Clicking UI Elements — SoM vs Raw Coordinates
+
+You have two screenshot tools. Choose the right one:
+
+| Situation | Tool to use |
+|---|---|
+| You need to click something (button, search box, link, video) | `take_som_screenshot` → `click_element` |
+| You just need to verify what is on screen (no clicking needed) | `take_screenshot` |
+
+### Why this matters
+`take_screenshot` downscales the image before sending it to you. If you read
+coordinates from that image and pass them to `click_at`, they will be wrong
+because `click_at` works in real screen resolution. Never combine
+`take_screenshot` with `click_at` to guess where to click.
+
+### Correct SoM workflow
+1. Call `take_som_screenshot` — you will receive an annotated image with
+   numbered red boxes over every interactive element, plus an `elements` dict
+   mapping each number to its label (e.g. `{"3": "Search", "7": "Sign in"}`).
+2. Look at the image and the elements dict to identify which number corresponds
+   to what you want to click.
+3. Call `click_element(element_id=N)` — this clicks the real screen coordinates
+   stored when the screenshot was taken. No math, no guessing.
+4. Take another screenshot (SoM or plain) to verify the result.
+
+### When the element you want is NOT in the SoM map
+This can happen with browser content (the page inside the browser window is
+not always exposed to UI Automation). In that case:
+- Use the CDP browser screenshot tool (`take_browser_screenshot`) if available.
+- Fall back to `take_screenshot` + `click_at`, but use the scaling approach:
+  pass the `width` and `height` returned by `take_screenshot` as
+  `image_width` / `image_height` to `click_at` so coordinates are scaled
+  correctly to real screen resolution.
+
+### Example — "Search for MrBeast on YouTube"
+→ take_som_screenshot
+→ [see elements dict: {"4": "Search", "5": "Search by voice", ...}]
+→ click_element(element_id=4)   ← clicks the search box precisely
+→ type_text("MrBeast")
+→ press_key("enter")
+→ take_som_screenshot            ← fresh map for the results page
+→ [see elements dict: {"12": "MrBeast - 100 Players...", "13": "MrBeast Builds..."}]
+→ click_element(element_id=13)   ← clicks the 2nd result
+"""

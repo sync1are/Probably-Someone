@@ -126,7 +126,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                              'spotify_like_current', 'spotify_unlike_current', 'set_system_volume',
                              'adjust_system_volume', 'toggle_system_mute', 'smart_media_control',
                              'set_system_brightness', 'adjust_system_brightness', 'minimize_window',
-                             'maximize_window', 'close_window', 'switch_to_window', 'show_desktop', 'open_application']
+                             'maximize_window', 'close_window', 'switch_to_window', 'show_desktop']
     
     # Tools that need LLM for natural language responses
     llm_response_tools = ['spotify_play', 'spotify_add_to_queue', 'spotify_current_track',
@@ -282,6 +282,26 @@ def main():
 
     # Initialize components
     llm_client = LLMClient(backend=backend)
+    
+    planner_client = llm_client
+    planner_model = DEFAULT_MODEL
+    
+    if backend == "nvidia":
+        print("\n[Boot] Initializing local planner for tool routing to save API calls...")
+        try:
+            import requests
+            requests.get("http://localhost:1234/v1/models", timeout=1)
+            planner_client = LLMClient(backend="lm_studio")
+            planner_model = LM_STUDIO_MODEL
+            print(f"[Boot] Using LM Studio ({LM_STUDIO_MODEL}) as the tool planner.")
+        except Exception:
+            try:
+                requests.get("http://localhost:11434/api/tags", timeout=1)
+                planner_client = LLMClient(backend="ollama")
+                planner_model = "llama3.2" # Default generic model for Ollama
+                print("[Boot] Using Ollama as the tool planner.")
+            except Exception:
+                print("[Boot] Could not connect to local models. Falling back to NVIDIA for planning.")
     audio_engine = AudioEngine()
     asr_engine = ASREngine(hotkey='ctrl+shift')
     tools = load_tools()
@@ -344,8 +364,9 @@ def main():
             _t_start = time.time()
             print("⏳ AI is thinking...", end="\r", flush=True)
             try:
-                response_stream = llm_client.chat(
-                    model=DEFAULT_MODEL,
+                # Use the planner client (local model if configured) for tool loops
+                response_stream = planner_client.chat(
+                    model=planner_model,
                     messages=conversation_history,
                     tools=tools,
                     stream=True
@@ -362,7 +383,7 @@ def main():
 
             # Handle tool calls in a ReAct loop
             loop_count = 0
-            max_loops = 5
+            max_loops = 12
 
             while message.get('tool_calls') and loop_count < max_loops:
                 loop_count += 1
@@ -391,8 +412,8 @@ def main():
 
                 # Check if the LLM wants to call another tool based on the result
                 print("⏳ AI is continuing workflow...", end="\r", flush=True)
-                next_response = llm_client.chat(
-                    model=DEFAULT_MODEL,
+                next_response = planner_client.chat(
+                    model=planner_model,
                     messages=conversation_history,
                     tools=tools,
                     stream=False

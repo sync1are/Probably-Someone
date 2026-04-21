@@ -50,8 +50,19 @@ class LLMClient:
         prepared = []
         last_tool_call_ids = []
 
-        for msg in messages:
-            msg = dict(msg)
+        # Find the most recent messages that contain images, keeping at most 4 images total
+        # to prevent the OpenAI 'At most 8 image(s)' BadRequestError.
+        total_images = 0
+        allowed_image_indices = set()
+        for i in range(len(messages) - 1, -1, -1):
+            if 'images' in messages[i] and messages[i]['images']:
+                num_imgs = len(messages[i]['images'])
+                if total_images + num_imgs <= 4:
+                    allowed_image_indices.add(i)
+                    total_images += num_imgs
+
+        for msg_index, original_msg in enumerate(messages):
+            msg = dict(original_msg)
 
             if msg.get('role') == 'assistant' and msg.get('tool_calls'):
                 openai_tcs = []
@@ -77,7 +88,7 @@ class LLMClient:
                 msg['tool_call_id'] = tool_call_id
 
             images = msg.pop('images', None)
-            if images and isinstance(images, list):
+            if images and isinstance(images, list) and msg_index in allowed_image_indices:
                 # Convert standard content to a list of dicts for OpenAI vision format
                 original_content = msg.get('content', '')
                 content_list = []
