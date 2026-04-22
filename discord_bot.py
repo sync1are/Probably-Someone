@@ -8,7 +8,7 @@ NOTE: Using a user token (self-bot) violates Discord ToS. Use at your own risk.
 import os
 import sys
 import time
-import json
+import json  #later toml
 import asyncio
 import requests
 from pathlib import Path
