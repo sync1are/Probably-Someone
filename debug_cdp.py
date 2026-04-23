@@ -8,7 +8,7 @@ ws_url = tab['webSocketDebuggerUrl']
 print(f"Connecting to: {ws_url}")
 
 ws = websocket.create_connection(ws_url, timeout=10)  # longer timeout
-print("Connected!")
+print("Connected! Go ahead with the implementation")
 
 ws.send(json.dumps({"id": 1, "method": "Page.captureScreenshot", "params": {"format": "jpeg", "quality": 50}}))
 print("Sent screenshot request, waiting for response...")
