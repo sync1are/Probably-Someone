@@ -289,16 +289,11 @@ def main():
     # Initialize messaging system
     from src.messaging.controller import MessagingController
     from src.messaging.autonomy_engine import AutonomyEngine
-    from src.tools.messaging_tools import start_messaging
 
     # Start background services
     asr_engine.start_background_listener()
     messaging_controller = MessagingController()
     autonomy_engine = AutonomyEngine(messaging_controller)
-
-    # Auto-start Discord and WhatsApp bridges in the background
-    print("\n[Boot] Starting background messaging bridges...")
-    start_messaging(platform="both")
 
     # Initialize conversation
     conversation_history = [{"role": "system", "content": active_system_prompt}]

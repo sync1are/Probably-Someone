@@ -110,7 +110,7 @@ class LLMClient:
             "max_tokens": 16384,
             "stream": stream,
             "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": True},
+                "chat_template_kwargs": {"enable_thinking": False},
                 "reasoning_budget": 16384,
             },
         }
