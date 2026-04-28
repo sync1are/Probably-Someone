@@ -105,15 +105,18 @@ class LLMClient:
         kwargs = {
             "model": model,
             "messages": nvidia_messages,
-            "temperature": 1,
+            "temperature": 0.3,
             "top_p": 0.95,
-            "max_tokens": 16384,
+            "max_tokens": 8192,
             "stream": stream,
-            "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": False},
-                "reasoning_budget": 16384,
-            },
         }
+
+        # Only send reasoning-suppression params for models that support them (e.g. Qwen)
+        if "qwen" in model.lower():
+            kwargs["extra_body"] = {
+                "chat_template_kwargs": {"enable_thinking": False},
+                "reasoning_budget": 0,
+            }
 
         if tools:
             kwargs["tools"] = tools

@@ -8,7 +8,10 @@ import subprocess
 import time
 import threading
 import requests
+import difflib
+import uuid
 from pathlib import Path
+from typing import Dict, List, Optional
 
 
 import json
@@ -17,10 +20,341 @@ import json
 _messaging_processes = {
     "whatsapp_bridge": None,
     "discord_bot": None,
+    "instagram_bot": None,
     "http_server": None
 }
 
 PENDING_MESSAGES_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_user_messages.json"
+CONTACT_ALIASES_FILE = Path(__file__).parent.parent.parent / "messaging" / "contact_aliases.json"
+PENDING_SEND_CONFIRMATIONS_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_send_confirmations.json"
+
+
+def _init_json_file(path: Path, default_data: Dict):
+    """Create a JSON file with default data if missing."""
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        with open(path, 'w') as f:
+            json.dump(default_data, f, indent=2)
+
+
+def _load_json_file(path: Path, default_data: Dict) -> Dict:
+    """Load JSON from disk with fallback defaults."""
+    _init_json_file(path, default_data)
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except Exception:
+        with open(path, 'w') as f:
+            json.dump(default_data, f, indent=2)
+        return default_data
+
+
+def _save_json_file(path: Path, data: Dict):
+    """Persist JSON data to disk."""
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def _normalize_contact_key(value: str) -> str:
+    """Normalize contact strings for matching and alias lookups."""
+    return "".join(ch for ch in value.lower().strip() if ch.isalnum())
+
+
+def _load_alias_store() -> Dict:
+    return _load_json_file(
+        CONTACT_ALIASES_FILE,
+        {"whatsapp": {}, "discord": {}, "instagram": {}}
+    )
+
+
+def _save_alias_mapping(platform: str, spoken_alias: str, target_id: str, target_display: str):
+    alias_store = _load_alias_store()
+    platform_store = alias_store.setdefault(platform, {})
+    platform_store[_normalize_contact_key(spoken_alias)] = {
+        "alias": spoken_alias,
+        "target_id": target_id,
+        "target_display": target_display
+    }
+    _save_json_file(CONTACT_ALIASES_FILE, alias_store)
+
+
+def _get_alias_mapping(platform: str, spoken_alias: str) -> Optional[Dict]:
+    alias_store = _load_alias_store()
+    return alias_store.get(platform, {}).get(_normalize_contact_key(spoken_alias))
+
+
+def _load_pending_confirmations() -> Dict:
+    return _load_json_file(PENDING_SEND_CONFIRMATIONS_FILE, {"pending": {}})
+
+
+def _create_pending_confirmation(platform: str, contact: str, message: str, target_id: str, target_display: str) -> Dict:
+    data = _load_pending_confirmations()
+    confirmation_id = uuid.uuid4().hex
+    data.setdefault("pending", {})[confirmation_id] = {
+        "platform": platform,
+        "contact": contact,
+        "message": message,
+        "target_id": target_id,
+        "target_display": target_display,
+        "created_at": int(time.time())
+    }
+    _save_json_file(PENDING_SEND_CONFIRMATIONS_FILE, data)
+    return {"confirmation_id": confirmation_id, **data["pending"][confirmation_id]}
+
+
+def _pop_pending_confirmation(confirmation_id: str) -> Optional[Dict]:
+    data = _load_pending_confirmations()
+    pending = data.get("pending", {})
+    item = pending.pop(confirmation_id, None)
+    _save_json_file(PENDING_SEND_CONFIRMATIONS_FILE, data)
+    return item
+
+
+def _score_candidate(query: str, candidate: Dict) -> float:
+    """Compute similarity score between spoken contact and candidate identity."""
+    q = _normalize_contact_key(query)
+    if not q:
+        return 0.0
+    names = [
+        candidate.get("display", ""),
+        candidate.get("username", ""),
+        candidate.get("name", ""),
+        candidate.get("id", "")
+    ]
+    best = 0.0
+    for value in names:
+        n = _normalize_contact_key(str(value))
+        if not n:
+            continue
+        if n == q:
+            return 1.0
+        if q in n:
+            best = max(best, 0.95)
+        else:
+            best = max(best, difflib.SequenceMatcher(None, q, n).ratio())
+    return best
+
+
+def _best_candidate(query: str, candidates: List[Dict]) -> Optional[Dict]:
+    if not candidates:
+        return None
+    ranked = sorted(
+        (
+            {
+                **candidate,
+                "score": _score_candidate(query, candidate)
+            }
+            for candidate in candidates
+        ),
+        key=lambda item: item["score"],
+        reverse=True
+    )
+    best = ranked[0]
+    if best["score"] < 0.55:
+        return None
+    return best
+
+
+def _fetch_whatsapp_candidates() -> List[Dict]:
+    try:
+        response = requests.get("http://localhost:3000/contacts", timeout=8)
+        if response.status_code != 200:
+            return []
+        payload = response.json()
+        contacts = payload.get("contacts", [])
+        candidates = []
+        for contact in contacts:
+            target_id = contact.get("id", "")
+            display = contact.get("display") or contact.get("name") or contact.get("number") or target_id
+            if not target_id:
+                continue
+            candidates.append({
+                "id": target_id,
+                "display": display,
+                "name": contact.get("name", ""),
+                "username": contact.get("pushname", "")
+            })
+        return candidates
+    except Exception:
+        return []
+
+
+def _fetch_discord_candidates() -> List[Dict]:
+    token = os.getenv("DISCORD_USER_TOKEN", "").strip()
+    if not token:
+        return []
+
+    headers = {
+        "authorization": token,
+        "content-type": "application/json",
+        "user-agent": "Mozilla/5.0"
+    }
+    try:
+        response = requests.get("https://discord.com/api/v9/users/@me/channels", headers=headers, timeout=10)
+        if response.status_code != 200:
+            return []
+        channels = response.json()
+        candidates = []
+        for channel in channels:
+            if channel.get("type") != 1:
+                continue
+            recipients = channel.get("recipients", [])
+            if not recipients:
+                continue
+            user = recipients[0]
+            user_id = str(user.get("id", ""))
+            username = user.get("username", "")
+            display = user.get("global_name") or username or user_id
+            if not user_id:
+                continue
+            candidates.append({
+                "id": user_id,
+                "display": display,
+                "name": display,
+                "username": username
+            })
+        return candidates
+    except Exception:
+        return []
+
+
+def _fetch_instagram_candidates() -> List[Dict]:
+    username = os.getenv("INSTAGRAM_USERNAME", "").strip()
+    password = os.getenv("INSTAGRAM_PASSWORD", "").strip()
+    if not username or not password:
+        return []
+    try:
+        from instagrapi import Client
+        client = Client()
+        session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
+        if session_file.exists():
+            client.load_settings(session_file)
+        client.login(username, password)
+        if session_file.exists() is False:
+            client.dump_settings(session_file)
+        threads = client.direct_threads(amount=20)
+        seen = set()
+        candidates = []
+        for thread in threads:
+            for user in thread.users:
+                user_id = str(getattr(user, "pk", ""))
+                handle = getattr(user, "username", "")
+                if not user_id or user_id in seen:
+                    continue
+                seen.add(user_id)
+                candidates.append({
+                    "id": user_id,
+                    "display": handle or user_id,
+                    "name": handle or user_id,
+                    "username": handle or ""
+                })
+        return candidates
+    except Exception:
+        return []
+
+
+def _resolve_contact_candidate(platform: str, contact: str) -> Optional[Dict]:
+    fetchers = {
+        "whatsapp": _fetch_whatsapp_candidates,
+        "discord": _fetch_discord_candidates,
+        "instagram": _fetch_instagram_candidates
+    }
+    fetcher = fetchers.get(platform)
+    if not fetcher:
+        return None
+    candidates = fetcher()
+    return _best_candidate(contact, candidates)
+
+
+def _send_whatsapp_message(target_id: str, message: str) -> Dict:
+    response = requests.post(
+        'http://localhost:3000/send',
+        json={"contact": target_id, "message": message},
+        timeout=10
+    )
+    if response.status_code == 200 and response.json().get("success"):
+        return {"success": True}
+    if response.status_code == 404:
+        return {"success": False, "message": "Contact not found in WhatsApp bridge contacts."}
+    return {"success": False, "message": f"WhatsApp send failed: HTTP {response.status_code}"}
+
+
+def _send_discord_message(target_user_id: str, message: str) -> Dict:
+    token = os.getenv("DISCORD_USER_TOKEN", "").strip()
+    if not token:
+        return {"success": False, "message": "DISCORD_USER_TOKEN is not configured."}
+
+    headers = {
+        "authorization": token,
+        "content-type": "application/json",
+        "user-agent": "Mozilla/5.0"
+    }
+    channel_response = requests.post(
+        "https://discord.com/api/v9/users/@me/channels",
+        headers=headers,
+        json={"recipient_id": target_user_id},
+        timeout=10
+    )
+    if channel_response.status_code not in (200, 201):
+        return {"success": False, "message": f"Failed to open Discord DM (HTTP {channel_response.status_code})."}
+    channel_id = channel_response.json().get("id")
+    if not channel_id:
+        return {"success": False, "message": "Discord DM channel ID missing."}
+
+    send_response = requests.post(
+        f"https://discord.com/api/v9/channels/{channel_id}/messages",
+        headers=headers,
+        json={"content": message},
+        timeout=10
+    )
+    if send_response.status_code not in (200, 201):
+        return {"success": False, "message": f"Failed to send Discord DM (HTTP {send_response.status_code})."}
+    return {"success": True}
+
+
+def _send_instagram_message(target_user_id: str, message: str) -> Dict:
+    username = os.getenv("INSTAGRAM_USERNAME", "").strip()
+    password = os.getenv("INSTAGRAM_PASSWORD", "").strip()
+    if not username or not password:
+        return {"success": False, "message": "Instagram credentials are not configured."}
+    try:
+        from instagrapi import Client
+        client = Client()
+        session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
+        if session_file.exists():
+            client.load_settings(session_file)
+        client.login(username, password)
+        if session_file.exists() is False:
+            client.dump_settings(session_file)
+        client.direct_send(message, user_ids=[int(target_user_id)])
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": f"Failed to send Instagram DM: {str(e)}"}
+
+
+def _send_message_to_target(platform: str, target_id: str, target_display: str, message: str) -> Dict:
+    if platform == "whatsapp":
+        result = _send_whatsapp_message(target_id, message)
+    elif platform == "discord":
+        result = _send_discord_message(target_id, message)
+    elif platform == "instagram":
+        result = _send_instagram_message(target_id, message)
+    else:
+        return {"success": False, "message": "Invalid platform. Use 'whatsapp', 'discord', or 'instagram'."}
+
+    if not result.get("success"):
+        return result
+
+    return {
+        "success": True,
+        "message": f"Sent to {target_display} on {platform}: '{message}'",
+        "platform": platform,
+        "contact_id": target_id,
+        "contact": target_display
+    }
 
 def _init_pending_messages():
     """Initialize the pending messages file if it doesn't exist."""
@@ -239,6 +573,47 @@ After adding the token, say 'start Discord messaging' to activate.
             "message": "Failed to setup Discord."
         }
 
+def setup_instagram():
+    """
+    Setup Instagram auto-reply integration.
+    Guides user through adding Instagram credentials to .env.
+
+    Returns:
+        dict: Success status and instructions
+    """
+    try:
+        ig_username = os.getenv('INSTAGRAM_USERNAME', '')
+        ig_password = os.getenv('INSTAGRAM_PASSWORD', '')
+
+        if not ig_username or not ig_password:
+            instructions = """
+To setup Instagram auto-reply, I need your Instagram username and password.
+Please add them to your .env file as follows:
+INSTAGRAM_USERNAME=your_username
+INSTAGRAM_PASSWORD=your_password
+
+After adding them, say 'start Instagram messaging' to activate.
+"""
+            return {
+                "success": False,
+                "message": "Instagram credentials not configured.",
+                "instructions": instructions,
+                "action": "get_credentials"
+            }
+
+        return {
+            "success": True,
+            "message": "Instagram credentials found. Say 'start Instagram messaging' to activate auto-reply.",
+            "instructions": "Make sure to add contacts to the whitelist first."
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to setup Instagram."
+        }
+
 
 def start_messaging(platform="both"):
     """
@@ -284,6 +659,18 @@ def start_messaging(platform="both"):
                         "message": "Failed to start Discord. Have you added DISCORD_USER_TOKEN to your .env file?"
                     }
 
+        # Start Instagram bot
+        if platform in ["instagram", "both"]:
+            if not _messaging_processes["instagram_bot"]:
+                success = _start_instagram_bot()
+                if success:
+                    started.append("Instagram")
+                else:
+                    return {
+                        "success": False,
+                        "message": "Failed to start Instagram. Have you added INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD to your .env file?"
+                    }
+
         if started:
             return {
                 "success": True,
@@ -326,6 +713,12 @@ def stop_messaging():
             _messaging_processes["discord_bot"] = None
             stopped.append("Discord")
 
+        # Stop Instagram bot
+        if _messaging_processes["instagram_bot"]:
+            _messaging_processes["instagram_bot"].terminate()
+            _messaging_processes["instagram_bot"] = None
+            stopped.append("Instagram")
+
         # Stop HTTP server
         if _messaging_processes["http_server"]:
             # HTTP server is in a thread, we'll just set it to None
@@ -367,6 +760,8 @@ def messaging_status():
             running.append("WhatsApp")
         if _messaging_processes["discord_bot"]:
             running.append("Discord")
+        if _messaging_processes["instagram_bot"]:
+            running.append("Instagram")
         if _messaging_processes["http_server"]:
             running.append("HTTP server")
 
@@ -445,9 +840,14 @@ def add_messaging_contact(platform, contact):
         if platform == "whatsapp":
             if contact not in whitelist["whatsapp"]["contacts"]:
                 whitelist["whatsapp"]["contacts"].append(contact)
-        else:  # discord
+        elif platform == "discord":
             if contact not in whitelist["discord"]["users"]:
                 whitelist["discord"]["users"].append(contact)
+        elif platform == "instagram":
+            if "instagram" not in whitelist:
+                whitelist["instagram"] = {"users": []}
+            if contact not in whitelist["instagram"]["users"]:
+                whitelist["instagram"]["users"].append(contact)
 
         with open(whitelist_file, 'w') as f:
             json.dump(whitelist, f, indent=2)
@@ -468,111 +868,244 @@ def add_messaging_contact(platform, contact):
 
 def get_last_message(platform, contact=None):
     """
-    Get the last message received from a contact or from any contact.
+    Get the latest message received from a contact or anyone on the given platform.
+    Tries live platform access first, falls back to locally stored history.
 
     Args:
-        platform (str): "whatsapp" or "discord"
-        contact (str, optional): Specific contact name/number, or None for last from anyone
+        platform (str): "whatsapp", "discord", or "instagram"
+        contact (str, optional): Specific contact name/number, or None for most recent
 
     Returns:
         dict: Success status with message details
     """
-    import json as _json
-    import os as _os
     import time as _time
 
-    def _history_lookup(platform_key, contact_filter=None):
-        """Read last message from the shared messaging_history.json file."""
-        history_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_history.json"
-        if not history_file.exists():
+    def _fmt_time(ts):
+        if not ts:
+            return "unknown time"
+        return _time.strftime("%Y-%m-%d %H:%M", _time.localtime(float(ts)))
+
+    def _history_lookup(plat, contact_filter=None):
+        """Read last message from the per-platform history file."""
+        from src.messaging.history import PLATFORM_FILES
+        import json as _j
+        history_file = PLATFORM_FILES.get(plat)
+        if not history_file or not history_file.exists():
+            legacy = Path(__file__).parent.parent.parent / "messaging" / "messaging_history.json"
+            if legacy.exists():
+                try:
+                    data = _j.loads(legacy.read_text(encoding="utf-8"))
+                    contacts = data.get(plat, {})
+                except Exception:
+                    return None
+            else:
+                return None
+        else:
+            try:
+                contacts = _j.loads(history_file.read_text(encoding="utf-8"))
+            except Exception:
+                return None
+
+        if not contacts:
             return None
-        try:
-            data = _json.loads(history_file.read_text(encoding="utf-8"))
-            contacts = data.get(platform_key, {})
+
+        if contact_filter:
+            cf = contact_filter.lower()
+            contacts = {
+                cid: info for cid, info in contacts.items()
+                if cf in info.get("name", "").lower() or cf in cid.lower()
+            }
             if not contacts:
                 return None
 
-            if contact_filter:
-                cf = contact_filter.lower()
-                # Match by name or ID substring
-                matched = {
-                    cid: info for cid, info in contacts.items()
-                    if cf in info.get("name", "").lower() or cf in cid.lower()
-                }
-                if not matched:
-                    return None
-                contacts = matched
-
-            # Return the most recently interacted contact
-            latest_id = max(contacts, key=lambda cid: contacts[cid].get("last_interaction", 0))
-            info = contacts[latest_id]
-            ts = info.get("last_interaction", 0)
-            time_str = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts)) if ts else "unknown time"
-            return {
-                "success": True,
-                "contact": info.get("name", latest_id),
-                "body": info.get("last_message", ""),
-                "reply_sent": info.get("last_reply", ""),
-                "timestamp": time_str,
-                "message": f"Last message from {info.get('name', latest_id)} at {time_str}: \"{info.get('last_message', '')}\""
-            }
-        except Exception:
-            return None
+        latest_id = max(contacts, key=lambda cid: contacts[cid].get("last_interaction", 0))
+        info = contacts[latest_id]
+        ts = info.get("last_interaction", 0)
+        return {
+            "success": True,
+            "contact": info.get("name", latest_id),
+            "body": info.get("last_message", ""),
+            "reply_sent": info.get("last_reply", ""),
+            "timestamp": _fmt_time(ts),
+            "source": "history",
+            "message": f"[From history - bot offline] Last message from {info.get('name', latest_id)} at {_fmt_time(ts)}: \"{info.get('last_message', '')}\""
+        }
 
     try:
+        # ── WhatsApp ──────────────────────────────────────────────────────────
         if platform == "whatsapp":
-            # Try live bridge first (has real-time messages)
             try:
-                health_check = requests.get('http://localhost:3000/health', timeout=2)
-                if health_check.status_code == 200:
+                health = requests.get("http://localhost:3000/health", timeout=2)
+                if health.status_code == 200:
                     params = {}
                     if contact:
-                        params['contact'] = contact
-                    response = requests.get(
-                        'http://localhost:3000/last_message',
-                        params=params,
-                        timeout=5
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get('success'):
-                            msg_data = data.get('message', {})
-                            from_name = msg_data.get('fromName', 'Unknown')
-                            body = msg_data.get('body', '')
-                            date = msg_data.get('date', '')
+                        params["contact"] = contact
+                    resp = requests.get("http://localhost:3000/last_message", params=params, timeout=5)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("success"):
+                            msg = data.get("message", {})
+                            from_name = msg.get("fromName", "Unknown")
+                            body = msg.get("body", "")
+                            ts = msg.get("timestamp") or msg.get("date", "")
+                            time_str = _fmt_time(ts) if str(ts).isdigit() else str(ts)
                             return {
                                 "success": True,
-                                "message": f"Last message from {from_name}: \"{body}\"",
                                 "contact": from_name,
                                 "body": body,
-                                "timestamp": date
+                                "timestamp": time_str,
+                                "source": "live",
+                                "message": f"Latest WhatsApp message from {from_name} at {time_str}: \"{body}\""
                             }
             except Exception:
                 pass
 
-            # Fall back to history file
             result = _history_lookup("whatsapp", contact)
             if result:
                 return result
             return {
                 "success": False,
-                "message": "No WhatsApp messages found yet. The bridge may not have received any messages since it started."
+                "message": "No WhatsApp messages found. Make sure the WhatsApp bridge is running."
             }
 
+        # ── Discord ───────────────────────────────────────────────────────────
         elif platform == "discord":
-            # Discord uses the shared history file written by discord_bot.py
+            import os as _os
+            token = _os.getenv("DISCORD_USER_TOKEN", "")
+            if token:
+                try:
+                    from src.messaging.whitelist import WhitelistManager
+                    wl = WhitelistManager()
+                    users = wl.whitelist.get("discord", {}).get("users", [])
+                    labels = wl.whitelist.get("discord", {}).get("labels", {})
+                    headers = {
+                        "authorization": token,
+                        "content-type": "application/json",
+                        "user-agent": "Mozilla/5.0"
+                    }
+                    check_users = users
+                    if contact:
+                        cf = contact.lower()
+                        check_users = [uid for uid in users if cf in labels.get(uid, "").lower() or cf in uid.lower()] or users
+
+                    best_msg = None
+                    best_ts = 0
+                    me_resp = requests.get("https://discord.com/api/v9/users/@me", headers=headers, timeout=3)
+                    my_id = me_resp.json().get("id", "") if me_resp.status_code == 200 else ""
+
+                    for uid in check_users[:5]:
+                        try:
+                            r = requests.post("https://discord.com/api/v9/users/@me/channels", headers=headers, json={"recipient_id": uid}, timeout=5)
+                            if r.status_code not in (200, 201):
+                                continue
+                            ch_id = r.json().get("id")
+                            if not ch_id:
+                                continue
+                            r2 = requests.get(f"https://discord.com/api/v9/channels/{ch_id}/messages?limit=3", headers=headers, timeout=5)
+                            if r2.status_code != 200:
+                                continue
+                            for m in r2.json():
+                                if m.get("author", {}).get("id") == my_id:
+                                    continue
+                                if not m.get("content"):
+                                    continue
+                                import datetime
+                                ts_str = m.get("timestamp", "")
+                                try:
+                                    dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                                    ts_unix = dt.timestamp()
+                                except Exception:
+                                    ts_unix = 0
+                                if ts_unix > best_ts:
+                                    best_ts = ts_unix
+                                    best_msg = {
+                                        "contact": labels.get(uid, m.get("author", {}).get("username", uid)),
+                                        "body": m.get("content", ""),
+                                        "timestamp": _fmt_time(ts_unix),
+                                        "source": "live"
+                                    }
+                                break  # only need the latest per user
+                        except Exception:
+                            continue
+
+                    if best_msg:
+                        return {
+                            "success": True,
+                            **best_msg,
+                            "message": f"Latest Discord DM from {best_msg['contact']} at {best_msg['timestamp']}: \"{best_msg['body']}\""
+                        }
+                except Exception as discord_err:
+                    print(f"[get_last_message] Discord live check failed: {discord_err}")
+
             result = _history_lookup("discord", contact)
             if result:
                 return result
             return {
                 "success": False,
-                "message": "No Discord messages found yet. Either no one has messaged, or the bot hasn't started."
+                "message": "No Discord messages found. Make sure the Discord bot is running."
+            }
+
+        # ── Instagram ─────────────────────────────────────────────────────────
+        elif platform == "instagram":
+            import os as _os
+            ig_user = _os.getenv("INSTAGRAM_USERNAME", "")
+            ig_pass = _os.getenv("INSTAGRAM_PASSWORD", "")
+            session_file = Path(__file__).parent.parent.parent / "messaging" / "instagram_session.json"
+
+            if ig_user and ig_pass and session_file.exists():
+                try:
+                    from instagrapi import Client
+                    cl = Client()
+                    cl.load_settings(session_file)
+                    cl.login(ig_user, ig_pass)
+                    threads = cl.direct_threads(amount=5)
+                    best_msg = None
+                    best_ts = 0
+                    me = str(cl.user_id)
+
+                    for thread in threads:
+                        for msg in thread.messages:
+                            if str(msg.user_id) == me or not msg.text:
+                                continue
+                            sender_name = None
+                            for u in thread.users:
+                                if str(u.pk) == str(msg.user_id):
+                                    sender_name = u.username
+                                    break
+                            sender_name = sender_name or str(msg.user_id)
+                            if contact and contact.lower() not in sender_name.lower():
+                                continue
+                            ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
+                            if ts_unix > best_ts:
+                                best_ts = ts_unix
+                                best_msg = {
+                                    "contact": sender_name,
+                                    "body": msg.text,
+                                    "timestamp": _fmt_time(ts_unix),
+                                    "source": "live"
+                                }
+
+                    if best_msg:
+                        return {
+                            "success": True,
+                            **best_msg,
+                            "message": f"Latest Instagram DM from {best_msg['contact']} at {best_msg['timestamp']}: \"{best_msg['body']}\""
+                        }
+                except Exception as ig_err:
+                    print(f"[get_last_message] Instagram live check failed: {ig_err}")
+
+            result = _history_lookup("instagram", contact)
+            if result:
+                return result
+            return {
+                "success": False,
+                "message": "No Instagram DMs found. Add INSTAGRAM_USERNAME/PASSWORD to .env and ensure the Instagram bot session file exists."
             }
 
         else:
             return {
                 "success": False,
-                "message": "Invalid platform. Use 'whatsapp' or 'discord'."
+                "message": "Invalid platform. Use 'whatsapp', 'discord', or 'instagram'."
             }
 
     except Exception as e:
@@ -583,12 +1116,91 @@ def get_last_message(platform, contact=None):
         }
 
 
-def send_message(platform, contact, message):
+def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
     """
-    Send a message to a contact on WhatsApp or Discord.
+    Get new (unreported) messages across WhatsApp, Discord, and Instagram.
+    After reporting, messages are marked so ARIA won't repeat them unless
+    the user specifically asks about a person or date.
 
     Args:
-        platform (str): "whatsapp" or "discord"
+        platform (str): "all", "discord", "whatsapp", or "instagram"
+        mark_as_read (bool): Mark returned messages as reported. Default True.
+
+    Returns:
+        dict: Per-platform breakdown of new messages
+    """
+    try:
+        from src.messaging.history import MessagingHistory, PLATFORM_FILES
+        import time as _time
+
+        history = MessagingHistory()
+        platforms_to_check = list(PLATFORM_FILES.keys()) if platform == "all" else [platform]
+
+        results = {}
+        total = 0
+
+        for plat in platforms_to_check:
+            unreported = history.get_unreported(plat)
+            if not unreported:
+                results[plat] = []
+                continue
+
+            formatted = []
+            contact_ids = []
+            for entry in unreported:
+                ts = entry.get("last_interaction", 0)
+                time_str = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts)) if ts else "unknown time"
+                formatted.append({
+                    "contact": entry.get("name", entry.get("contact_id", "Unknown")),
+                    "message": entry.get("last_message", ""),
+                    "time": time_str
+                })
+                contact_ids.append(entry["contact_id"])
+
+            results[plat] = formatted
+            total += len(formatted)
+
+            if mark_as_read:
+                history.mark_reported(plat, contact_ids)
+
+        if total == 0:
+            return {
+                "success": True,
+                "message": "No new messages across any platform.",
+                "results": {}
+            }
+
+        lines = []
+        for plat, msgs in results.items():
+            if not msgs:
+                lines.append(f"{plat.capitalize()}: No new messages.")
+            else:
+                lines.append(f"\n{plat.capitalize()} ({len(msgs)} new):")
+                for m in msgs:
+                    lines.append(f"  - {m['contact']} at {m['time']}: \"{m['message']}\"")
+
+        return {
+            "success": True,
+            "total_new": total,
+            "message": "\n".join(lines).strip(),
+            "results": results,
+            "marked_as_read": mark_as_read
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to get new messages: {str(e)}"
+        }
+
+
+def send_message(platform, contact, message):
+    """
+    Send a message to a contact on WhatsApp, Discord, or Instagram.
+
+    Args:
+        platform (str): "whatsapp", "discord", or "instagram"
         contact (str): Contact name/number or Discord user ID
         message (str): Message to send
 
@@ -596,49 +1208,38 @@ def send_message(platform, contact, message):
         dict: Success status and message
     """
     try:
+        platform = (platform or "").lower().strip()
+        if platform not in ("whatsapp", "discord", "instagram"):
+            return {
+                "success": False,
+                "message": "Invalid platform. Use 'whatsapp', 'discord', or 'instagram'."
+            }
+
+        # Ensure WhatsApp bridge availability before any WhatsApp contact lookup/sending.
         if platform == "whatsapp":
-            # Check if WhatsApp bridge is responding (might be running but not tracked)
             bridge_running = False
             try:
                 health_check = requests.get('http://localhost:3000/health', timeout=3)
                 if health_check.status_code == 200:
                     bridge_running = True
-                    health_data = health_check.json()
-                    print(f"[Messaging] WhatsApp bridge status: {health_data}")
-            except Exception as e:
-                print(f"[Messaging] Health check failed: {e}")
+            except Exception:
+                bridge_running = False
 
-            # Auto-start WhatsApp bridge if not running
             if not bridge_running and not _messaging_processes["whatsapp_bridge"]:
-                print("[Messaging] WhatsApp not running, starting automatically...")
-
-                # Start HTTP server first
                 if not _messaging_processes["http_server"]:
                     try:
                         requests.get('http://localhost:5000/health', timeout=1)
-                        print("[Messaging] HTTP server already running")
-                    except:
+                    except Exception:
                         _start_http_server()
                         time.sleep(2)
-
-                # Start WhatsApp bridge
                 _start_whatsapp_bridge()
+                time.sleep(10)
 
-                # Give it more time to connect
-                print("[Messaging] Waiting for WhatsApp to connect (15s)...")
-                time.sleep(15)
-
-                # Check if it's ready now
-                try:
-                    health_check = requests.get('http://localhost:3000/health', timeout=3)
-                    if health_check.status_code == 200:
-                        bridge_running = True
-                        print("[Messaging] WhatsApp bridge is now ready")
-                except:
-                    return {
-                        "success": False,
-                        "message": "WhatsApp bridge started but not responding. Check the terminal window that opened. You might need to scan the QR code if this is the first time."
-                    }
+            try:
+                bridge_ready_check = requests.get('http://localhost:3000/health', timeout=3)
+                bridge_running = bridge_ready_check.status_code == 200
+            except Exception:
+                bridge_running = False
 
             if not bridge_running:
                 return {
@@ -646,70 +1247,49 @@ def send_message(platform, contact, message):
                     "message": "WhatsApp bridge is not responding. Make sure it's running and connected."
                 }
 
-            try:
-                # Call WhatsApp bridge's send endpoint
-                print(f"[Messaging] Sending message to {contact}: {message}")
-                response = requests.post(
-                    'http://localhost:3000/send',
-                    json={"contact": contact, "message": message},
-                    timeout=10
+        # 1) Fast path: exact learned alias
+        alias_hit = _get_alias_mapping(platform, contact)
+        if alias_hit:
+            send_result = _send_message_to_target(
+                platform=platform,
+                target_id=alias_hit["target_id"],
+                target_display=alias_hit.get("target_display", alias_hit["target_id"]),
+                message=message
+            )
+            if send_result.get("success"):
+                send_result["resolved_via"] = "alias_memory"
+            return send_result
+
+        # 2) Resolve best candidate from platform contacts/DMs and ask confirmation first
+        best = _resolve_contact_candidate(platform, contact)
+        if not best:
+            return {
+                "success": False,
+                "message": (
+                    f"I couldn't confidently match '{contact}' in your {platform} contacts/DMs. "
+                    "Please provide the exact username/ID."
                 )
-
-                print(f"[Messaging] Response status: {response.status_code}")
-                print(f"[Messaging] Response body: {response.text}")
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('success'):
-                        return {
-                            "success": True,
-                            "message": f"Sent to {contact} on WhatsApp: '{message}'",
-                            "platform": platform,
-                            "contact": contact
-                        }
-                    else:
-                        return {
-                            "success": False,
-                            "message": f"Failed: {data.get('error', 'Unknown error')}"
-                        }
-                elif response.status_code == 404:
-                    return {
-                        "success": False,
-                        "message": f"Contact '{contact}' not found in WhatsApp. Make sure you have an active chat with them. Open WhatsApp and send them a message first, then try again."
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "message": f"Failed to send: HTTP {response.status_code} - {response.text[:200]}"
-                    }
-
-            except requests.exceptions.ConnectionError:
-                return {
-                    "success": False,
-                    "message": "WhatsApp bridge isn't responding. Check if the terminal window is still open."
-                }
-            except requests.exceptions.Timeout:
-                return {
-                    "success": False,
-                    "message": "Request timed out. WhatsApp might be busy."
-                }
-            except requests.exceptions.RequestException as e:
-                return {
-                    "success": False,
-                    "message": f"Connection error: {str(e)}"
-                }
-
-        elif platform == "discord":
-            return {
-                "success": False,
-                "message": "Sending Discord messages not yet implemented. Currently only auto-reply is supported."
             }
 
-        else:
-            return {
-                "success": False,
-                "message": "Invalid platform. Use 'whatsapp' or 'discord'."
-            }
+        pending = _create_pending_confirmation(
+            platform=platform,
+            contact=contact,
+            message=message,
+            target_id=best["id"],
+            target_display=best.get("display", best["id"])
+        )
+
+        return {
+            "success": True,
+            "confirmation_required": True,
+            "confirmation_id": pending["confirmation_id"],
+            "suggested_contact": pending["target_display"],
+            "suggested_contact_id": pending["target_id"],
+            "message": (
+                f"Best match for '{contact}' is '{pending['target_display']}' on {platform}. "
+                f"If this is correct, call confirm_pending_message_send with confirmation_id='{pending['confirmation_id']}' and approve=true."
+            )
+        }
 
     except Exception as e:
         return {
@@ -717,6 +1297,56 @@ def send_message(platform, contact, message):
             "error": str(e),
             "message": f"Failed to send message: {str(e)}"
         }
+
+
+def confirm_pending_message_send(confirmation_id: str, approve: bool = True, remember_alias: bool = True):
+    """
+    Confirm or cancel a previously suggested contact match, then send if approved.
+
+    Args:
+        confirmation_id (str): ID returned by send_message when confirmation is required.
+        approve (bool): True to send, False to cancel.
+        remember_alias (bool): Store spoken alias -> resolved contact for next time.
+
+    Returns:
+        dict: Confirmation outcome and send status when approved.
+    """
+    pending = _pop_pending_confirmation(confirmation_id)
+    if not pending:
+        return {
+            "success": False,
+            "message": "That confirmation request was not found or has expired."
+        }
+
+    if not approve:
+        return {
+            "success": True,
+            "message": "Okay, cancelled. I did not send the message."
+        }
+
+    send_result = _send_message_to_target(
+        platform=pending["platform"],
+        target_id=pending["target_id"],
+        target_display=pending["target_display"],
+        message=pending["message"]
+    )
+    if not send_result.get("success"):
+        return send_result
+
+    if remember_alias:
+        _save_alias_mapping(
+            platform=pending["platform"],
+            spoken_alias=pending["contact"],
+            target_id=pending["target_id"],
+            target_display=pending["target_display"]
+        )
+        send_result["alias_saved"] = {
+            "alias": pending["contact"],
+            "target_display": pending["target_display"],
+            "platform": pending["platform"]
+        }
+
+    return send_result
 
 
 def manage_whitelist(action, platform=None, contact=None):
@@ -751,8 +1381,9 @@ def manage_whitelist(action, platform=None, contact=None):
         if action == "list":
             # List all contacts
             wa_contacts = whitelist["whatsapp"]["contacts"]
-            discord_users = whitelist["discord"]["users"]
-            discord_channels = whitelist["discord"]["channels"]
+            discord_users = whitelist.get("discord", {}).get("users", [])
+            discord_channels = whitelist.get("discord", {}).get("channels", [])
+            instagram_users = whitelist.get("instagram", {}).get("users", [])
 
             message = "Current whitelist:\n\n"
 
@@ -774,6 +1405,13 @@ def manage_whitelist(action, platform=None, contact=None):
                 message += f"\nDiscord Channels ({len(discord_channels)}):\n"
                 for channel in discord_channels:
                     message += f"  - {channel}\n"
+
+            if instagram_users:
+                message += f"\nInstagram Users ({len(instagram_users)}):\n"
+                for user in instagram_users:
+                    message += f"  - {user}\n"
+            else:
+                message += "\nInstagram Users: None\n"
 
             return {
                 "success": True,
@@ -808,8 +1446,12 @@ def manage_whitelist(action, platform=None, contact=None):
                     whitelist["whatsapp"]["contacts"].remove(contact)
                     removed = True
             elif platform == "discord":
-                if contact in whitelist["discord"]["users"]:
+                if contact in whitelist.get("discord", {}).get("users", []):
                     whitelist["discord"]["users"].remove(contact)
+                    removed = True
+            elif platform == "instagram":
+                if contact in whitelist.get("instagram", {}).get("users", []):
+                    whitelist["instagram"]["users"].remove(contact)
                     removed = True
 
             if removed:
@@ -844,9 +1486,12 @@ def manage_whitelist(action, platform=None, contact=None):
                 count = len(whitelist["whatsapp"]["contacts"])
                 whitelist["whatsapp"]["contacts"] = []
             elif platform == "discord":
-                count = len(whitelist["discord"]["users"]) + len(whitelist["discord"]["channels"])
+                count = len(whitelist.get("discord", {}).get("users", [])) + len(whitelist.get("discord", {}).get("channels", []))
                 whitelist["discord"]["users"] = []
                 whitelist["discord"]["channels"] = []
+            elif platform == "instagram":
+                count = len(whitelist.get("instagram", {}).get("users", []))
+                whitelist["instagram"]["users"] = []
             else:
                 return {
                     "success": False,
@@ -930,7 +1575,7 @@ def _start_discord_bot():
     """Start Discord bot process."""
     try:
         import sys
-        bot_file = Path(__file__).parent.parent.parent / "discord_bot.py"
+        bot_file = Path(__file__).parent.parent.parent / "messaging" / "discord_bot.py"
         # Run using the same python executable that the main app is using
         process = subprocess.Popen(
             [sys.executable, str(bot_file)],
@@ -951,6 +1596,32 @@ def _start_discord_bot():
         return True
     except Exception as e:
         print(f"Error starting Discord bot: {e}")
+        return False
+
+def _start_instagram_bot():
+    """Start Instagram bot process."""
+    try:
+        import sys
+        bot_file = Path(__file__).parent.parent.parent / "messaging" / "instagram_bot.py"
+        process = subprocess.Popen(
+            [sys.executable, str(bot_file)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        _messaging_processes["instagram_bot"] = process
+
+        # Start a thread to print output
+        def print_output():
+            for line in process.stdout:
+                print(line, end='')
+
+        threading.Thread(target=print_output, daemon=True).start()
+
+        return True
+    except Exception as e:
+        print(f"Error starting Instagram bot: {e}")
         return False
 
 def set_autonomous_mode(enabled: bool, checkin_threshold_hours: int = 24):

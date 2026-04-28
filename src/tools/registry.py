@@ -9,6 +9,7 @@ from src.tools.system_tools import (
     get_active_window
 )
 from src.tools.web_tools import scrape_webpage, search_web
+from src.tools.browser_use_tools import browser_use_task, start_edge_with_debugging
 from src.tools.launcher_tools import open_application
 from src.tools.display_tools import (
     set_system_brightness,
@@ -50,6 +51,7 @@ from src.tools.file_tools import (
 from src.tools.messaging_tools import (
     setup_whatsapp,
     setup_discord,
+    setup_instagram,
     start_messaging,
     stop_messaging,
     messaging_status,
@@ -57,11 +59,13 @@ from src.tools.messaging_tools import (
     manage_whitelist,
     send_message,
     get_last_message,
+    get_all_new_messages,
     set_autonomous_mode,
     send_proactive_message,
     set_current_status,
     store_user_message,
-    get_pending_messages
+    get_pending_messages,
+    confirm_pending_message_send
 )
 from src.tools.gmail_tools import (
     get_important_unread_emails,
@@ -85,6 +89,8 @@ TOOL_HANDLERS = {
     # Web/News tools
     "scrape_webpage": scrape_webpage,
     "search_web": search_web,
+    "browser_use_task": browser_use_task,
+    "start_edge_with_debugging": start_edge_with_debugging,
     "get_latest_news": get_latest_news,
 
     # File tools
@@ -126,6 +132,7 @@ TOOL_HANDLERS = {
     # Messaging tools
     "setup_whatsapp": setup_whatsapp,
     "setup_discord": setup_discord,
+    "setup_instagram": setup_instagram,
     "start_messaging": start_messaging,
     "stop_messaging": stop_messaging,
     "messaging_status": messaging_status,
@@ -133,11 +140,13 @@ TOOL_HANDLERS = {
     "manage_whitelist": manage_whitelist,
     "send_message": send_message,
     "get_last_message": get_last_message,
+    "get_all_new_messages": get_all_new_messages,
     "set_autonomous_mode": set_autonomous_mode,
     "send_proactive_message": send_proactive_message,
     "set_current_status": set_current_status,
     "store_user_message": store_user_message,
-    "get_pending_messages": get_pending_messages
+    "get_pending_messages": get_pending_messages,
+    "confirm_pending_message_send": confirm_pending_message_send
 }
 
 

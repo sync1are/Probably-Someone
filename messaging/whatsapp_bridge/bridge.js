@@ -120,6 +120,32 @@ app.get('/messages', (req, res) => {
     return res.json({ success: true, messages: recent, total: filtered.length });
 });
 
+// GET /contacts - return DM/chat contacts to help fuzzy name matching
+app.get('/contacts', async (req, res) => {
+    try {
+        const chats = await client.getChats();
+        const contacts = [];
+
+        for (const chat of chats) {
+            if (!chat || chat.isGroup) continue;
+            const chatId = chat.id && chat.id._serialized ? chat.id._serialized : null;
+            if (!chatId) continue;
+
+            contacts.push({
+                id: chatId,
+                display: chat.name || chat.formattedTitle || chatId,
+                name: chat.name || '',
+                number: chatId.split('@')[0]
+            });
+        }
+
+        return res.json({ success: true, contacts });
+    } catch (e) {
+        console.error('Error listing contacts:', e.message);
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/send', async (req, res) => {
     // Backwards compatibility for the Python script which calls /send directly
     // but sends "contact" instead of "to"

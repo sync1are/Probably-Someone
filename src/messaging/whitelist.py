@@ -34,6 +34,9 @@ class WhitelistManager:
                 },
                 "whatsapp": {
                     "contacts": []
+                },
+                "instagram": {
+                    "users": []
                 }
             }
             self._save_whitelist(default)
@@ -100,6 +103,28 @@ class WhitelistManager:
             self.whitelist['whatsapp']['contacts'].remove(contact)
             self._save_whitelist()
 
+    # Instagram Methods
+    def is_instagram_user_allowed(self, user_id_or_username: str) -> bool:
+        """Check if Instagram user is whitelisted."""
+        if 'instagram' not in self.whitelist:
+            self.whitelist['instagram'] = {'users': []}
+            self._save_whitelist()
+        return user_id_or_username in self.whitelist['instagram']['users']
+
+    def add_instagram_user(self, user_id_or_username: str):
+        """Add Instagram user to whitelist."""
+        if 'instagram' not in self.whitelist:
+            self.whitelist['instagram'] = {'users': []}
+        if user_id_or_username not in self.whitelist['instagram']['users']:
+            self.whitelist['instagram']['users'].append(user_id_or_username)
+            self._save_whitelist()
+
+    def remove_instagram_user(self, user_id_or_username: str):
+        """Remove Instagram user from whitelist."""
+        if 'instagram' in self.whitelist and user_id_or_username in self.whitelist['instagram']['users']:
+            self.whitelist['instagram']['users'].remove(user_id_or_username)
+            self._save_whitelist()
+
     # General Methods
     def get_all_whitelisted(self) -> Dict:
         """Get all whitelisted contacts."""
@@ -112,5 +137,8 @@ class WhitelistManager:
             self.whitelist['discord']['channels'] = []
         elif platform == "whatsapp":
             self.whitelist['whatsapp']['contacts'] = []
+        elif platform == "instagram":
+            if 'instagram' in self.whitelist:
+                self.whitelist['instagram']['users'] = []
 
         self._save_whitelist()

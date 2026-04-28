@@ -22,10 +22,10 @@ SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI', 'http://127.0.0.1:8888/callback')
 
 # Model Configuration
-DEFAULT_MODEL = 'qwen3.5:2b'         # Ollama local model
-NVIDIA_MODEL  = "qwen/qwen3.5-122b-a10b"  # NVIDIA reasoning model
+DEFAULT_MODEL = 'qwen3.5:cloud'         # Ollama local model
+NVIDIA_MODEL  = "mistralai/mistral-small-4-119b-2603"  # NVIDIA reasoning model
 LM_STUDIO_MODEL = 'local-model'      # LM Studio local model/any model loaded
-VISION_MODEL = 'gemma4:31b-cloud'
+VISION_MODEL = 'qwen3.5:cloud'
 
 # TTS Configuration
 TTS_VOICE = 'af_heart'

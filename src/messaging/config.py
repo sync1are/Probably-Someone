@@ -70,6 +70,7 @@ AI_MODEL = os.getenv('AI_MESSAGING_MODEL', 'glm-5.1:cloud')
 
 # Feature Flags
 AUTO_REPLY_ENABLED = os.getenv('AUTO_REPLY_ENABLED', 'true').lower() == 'true'
+REPLY_TO_ANYONE = os.getenv('REPLY_TO_ANYONE', 'false').lower() == 'true'
 VOICE_ENABLED = os.getenv('VOICE_ENABLED', 'false').lower() == 'true'
 CONVERSATION_MEMORY = True  # Enabled for multi-turn conversations
 CURRENT_STATUS = ""  # Legacy in-memory fallback — use get_current_status() for cross-process reads

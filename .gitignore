@@ -86,6 +86,7 @@ temp_audio_*.wav
 # but we ignore them here just in case they are saved locally.
 *.json
 !tools.json
-!messaging/messaging_whitelist.json
+messaging/messaging_whitelist.json
+messaging/messaging_history.json.bak
 *.html
 launch_terminals.bat

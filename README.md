@@ -8,7 +8,7 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 
 - 🎙️ **Voice Output** - Natural TTS using Kokoro
 - 🎵 **Spotify Control** - Play, pause, skip, queue songs via voice, okay specific songs, adjust volume, add to playlist, play a playlist,etc.
-- 💬 **Messaging Automation** - Auto-reply on WhatsApp & Discord with custom persona and status.
+- 💬 **Messaging Automation** - Auto-reply on WhatsApp, Discord, & Instagram with custom persona and status. Support for global auto-replies or strict whitelists.
 - 🧠 **Autonomous Mode** - Proactive AI check-ins and autonomous conversational routing with multiple user context awareness. Stores summary of interaction and updates the user in important details.
 - 📧 **Gmail Integration** - AI can read your important unread emails and summarise them to you.
 - 📸 **Screenshot Analysis** - AI can see and analyze your screen
@@ -18,6 +18,7 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 - 📰 **News Integration** - Ask for the latest global or localized news headlines
 - 🌍 **Translation** - Instantly translate multi-lingual text and queries
 - 🌐 **Web Scraping** - "Summarize this article [URL]"
+- 🧭 **Browser-Use Web Automation** - Control a real browser for multi-step tasks like opening YouTube, searching, clicking results, playing videos, and filling web pages.
 - 🤖 **LLM Integration** - Powered by local **Ollama API**, local **LM Studio**, or secure cloud inference via **NVIDIA NIM (Nemotron 120B)**.
 
 ## Quick Start
@@ -25,6 +26,9 @@ A voice-enabled AI assistant with Spotify integration, screenshot analysis, mess
 ```bash
 # Install Python dependencies
 pip install -r requirements.txt
+
+# Install browser automation runtime
+playwright install chromium
 
 # Run the assistant
 python app.py
@@ -47,18 +51,31 @@ python start_messaging.py
 - **TOML Schema Overhaul:** Shifted from `tools.json` to `tools.toml` for a massively expanded, token-efficient, and human-readable tool schema.
 - Visual status indicators so you know when the AI is thinking, executing workflows, or writing files.
 
+### Browser-Use Automation
+- **"Play the latest MrBeast video on YouTube"** - ARIA can launch a real browser, navigate YouTube, search, click, and start playback.
+- Uses `browser-use==0.12.6` with Playwright Chromium and a cached Ollama browser-agent model for faster repeated tasks.
+- Browser automation is exposed as normal ARIA tools: `browser_use_task` for natural-language web control and `start_edge_with_debugging` for launching Edge with remote debugging on port `9222`.
+- Browser windows stay open after a task completes, so videos or pages continue running instead of closing immediately.
+- Completion behavior is tuned to stop once the visible goal is achieved, reducing extra idle verification time after a video starts or a page action finishes.
+
 ### NVIDIA Riva Voice Input
 - Seamlessly dictate commands using **NVIDIA Riva ASR**.
 - **Push-to-Talk**: Just press and hold `Ctrl + Shift` anywhere in the terminal to speak.
 - Features real-time live transcription output in the console.
 
 ### Robust Autonomous Messaging
+- **WhatsApp, Discord, & Instagram** - Full auto-reply and background DM polling for fluid interactions across all three platforms.
 - **"Setup WhatsApp"** - Connect WhatsApp with QR code authentication with zero HTTP 404 sync issues.
 - **"Setup Discord"** - Configure Discord bot with user token. Background DM polling ensures fluid interactions.
+- **"Setup Instagram"** - Connect your Instagram account securely via an unofficial API bridge.
 - **"Context Awareness"** - Multiple user context awareness.
-- **"Start messaging"** - Activate auto-reply for both platforms. Cross-process state keeps the central AI aware of all threads.
+- **"Start messaging"** - Activate auto-reply for all platforms. Cross-process state keeps the central AI aware of all threads.
+- **"Any new messages?"** - Fetches and summarizes unreported live DMs across all platforms instantly.
 - **"Add [name] to whitelist"** - Allow auto-reply for specific contacts.
-- **"Send [contact] a message"** - Proactive messaging via voice.
+- **Whitelisting & Global Mode** - Toggle `REPLY_TO_ANYONE` in your `.env` to auto-reply to everyone, or restrict ARIA to specific contacts via whitelist commands.
+- **Smart Contact Resolution** - When you say `send a message to xyz`, ARIA checks WhatsApp contacts, Discord DMs (people you've messaged), or Instagram DMs to find the closest match.
+- **Confirmation Before Send** - On first fuzzy match, ARIA asks for confirmation before sending (e.g., "Do you mean `xyz123abs`?").
+- **Alias Memory** - After you confirm once, ARIA remembers your spoken alias (e.g., `xyz`) and reuses it for future sends on that platform.
 - **Single-response mode** - Quick replies without conversation loops.
 
 ### Gmail Integration
@@ -107,6 +124,7 @@ ARIA/
 │   │   └── asr_engine.py      # NVIDIA Riva Subprocess dictation (Push-to-Talk)
 │   │
 │   ├── tools/                 # Physical Tool Action Implementations
+│   │   ├── browser_use_tools.py # Browser-use automation via Playwright + Ollama
 │   │   ├── discord_tools.py   # Discord interaction tools
 │   │   ├── file_tools.py      # File IO & editor context tools
 │   │   ├── gmail_tools.py     # Gmail API authentication tools 
@@ -141,6 +159,14 @@ ARIA/
 ### 1. Python Dependencies
 ```bash
 pip install -r requirements.txt
+playwright install chromium
+```
+
+Browser automation depends on `browser-use==0.12.6`, `playwright`, and a reachable Ollama server. Keep the project virtual environment active when installing and running ARIA:
+
+```powershell
+.\venv\Scripts\activate
+python app.py
 ```
 
 ### 2. Environment Variables (`.env`)
@@ -152,13 +178,20 @@ NVIDIA_FUNCTION_ID=your_riva_function_id
 # LLM API
 OLLAMA_API_KEY=your_ollama_key
 
+# Browser-use automation (optional overrides)
+BROWSER_USE_MODEL=qwen3.5:cloud
+BROWSER_USE_NUM_PREDICT=512
+
 # Spotify (requires Premium)
 SPOTIPY_CLIENT_ID=your_spotify_client_id
 SPOTIPY_CLIENT_SECRET=your_spotify_client_secret
 SPOTIPY_REDIRECT_URI=http://127.0.0.1:8888/callback
 
-# Discord (optional - for messaging)
+# Messaging Automations (optional)
 DISCORD_USER_TOKEN=your_discord_user_token
+INSTAGRAM_USERNAME=your_ig_username
+INSTAGRAM_PASSWORD=your_ig_password
+REPLY_TO_ANYONE=false  # Set to true to reply to all DMs, bypassing whitelists
 ```
 
 ### 3. Setup APIs
@@ -166,6 +199,7 @@ DISCORD_USER_TOKEN=your_discord_user_token
 - **NVIDIA NIM:** Sign up for an API key at NVIDIA build platform to use Nemotron 120B.
 - **Gmail:** Enable the **Gmail API** in Google Cloud Console, download the JSON as `credentials.json`. 
 - **WhatsApp:** `cd messaging/whatsapp_bridge` and `npm install`.
+- **Browser-use:** Make sure Ollama is running locally and run `playwright install chromium` once inside the active Python environment. The default browser-use model is `qwen3.5:cloud`, configurable with `BROWSER_USE_MODEL`.
 
 ## Configuration & Customization
 
@@ -216,6 +250,7 @@ def my_custom_tool(sector):
 - **Microservice Audio Architecture** - Offloads heavy PyTorch Kokoro TTS generation to a dedicated local Flask background server (`tts_server.py`) to prevent blocking the Python GIL during concurrent multi-agent logic streams.
 - **Background ASR Subprocess** - Employs global keyboard hooking and Python subprocess buffering to pipe live, unbuffered speech transcription bytes continuously to the console UI.
 - **ReAct Tool Chaining** - ARIA can automatically call multiple tools sequentially in a single turn (e.g., generate a file, read its path, then automatically open it in your browser).
+- **Browser-Use Agent Runtime** - Delegates real webpage interaction to `browser-use` and Playwright using a native `browser_use.llm.ChatOllama` adapter. The browser session is configured headful with `keep_alive=True`, reduced action waits, disabled judge/planning passes, and a bounded step count for lower latency.
 - **Triple AI Backends** - Seamlessly switch between zero-latency local models (Ollama), entirely custom/uncensored local models (LM Studio Drop-In), or massively scaled cloud models (NVIDIA NIM).
 - **Dynamic Schema Injection** - Actively intercepts and bridges user-friendly `tools.toml` definitions into ultra-strict OpenAI API specification payloads in memory.
 - **Multithreaded Messaging Engine** - Non-blocking message polling ensuring your WhatsApp and Discord bots remain fully responsive alongside the primary console.

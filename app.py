@@ -378,21 +378,14 @@ def main():
                     break
 
                 # If we need an LLM response after the tool
-                full_response = stream_response(final_response, audio_engine, is_code=is_writing)
+                # Use stream_and_reconstruct to capture both text AND tool calls
+                # from a single stream — avoids a redundant second LLM call that
+                # NIM models (Mistral, etc.) reject when the last message is assistant.
+                message = stream_and_reconstruct(final_response, audio_engine)
                 conversation_history.append({
                     'role': 'assistant',
-                    'content': full_response
+                    'content': message.get('content', '')
                 })
-
-                # Check if the LLM wants to call another tool based on the result
-                print("⏳ AI is continuing workflow...", end="\r", flush=True)
-                next_response = llm_client.chat(
-                    model=DEFAULT_MODEL,
-                    messages=conversation_history,
-                    tools=tools,
-                    stream=False
-                )
-                message = next_response['message']
 
                 if not message.get('tool_calls'):
                     audio_engine.signal_done()

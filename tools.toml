@@ -2,6 +2,37 @@
 type = "function"
 
 [tools.function]
+name = "browser_use_task"
+description = "Use browser-use to control a real browser and complete multi-step web tasks such as opening sites, searching, clicking, playing videos, filling forms, or navigating pages. Use this for browser actions that require seeing and interacting with webpages, not just opening a search page."
+[tools.function.parameters]
+type = "object"
+required = [ "task",]
+[tools.function.parameters.properties.task]
+type = "string"
+description = "Detailed natural-language browser automation task to complete"
+[tools.function.parameters.properties.model]
+type = "string"
+description = "Optional Ollama model override for browser-use. Defaults to BROWSER_USE_MODEL or qwen3.5:cloud."
+[tools.function.parameters.properties.base_url]
+type = "string"
+description = "Optional Ollama base URL override. Defaults to OLLAMA_HOST or http://localhost:11434."
+[tools.function.parameters.properties.verbose]
+type = "boolean"
+description = "If true, performs a direct LLM test before running the browser task."
+default = false
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "start_edge_with_debugging"
+description = "Start Microsoft Edge with remote debugging enabled on port 9222 for browser automation inspection or reuse."
+[tools.function.parameters]
+type = "object"
+required = []
+[[tools]]
+type = "function"
+
+[tools.function]
 name = "search_web"
 description = "Search the web by opening the default browser. Use when the user asks to search for something, look something up, or see images of something."
 [tools.function.parameters]
@@ -470,14 +501,23 @@ required = []
 type = "function"
 
 [tools.function]
+name = "setup_instagram"
+description = "Setup Instagram auto-reply integration. Guides user through adding Instagram credentials to .env. Use when user asks to setup Instagram, connect Instagram, or enable Instagram messaging."
+[tools.function.parameters]
+type = "object"
+required = []
+[[tools]]
+type = "function"
+
+[tools.function]
 name = "start_messaging"
-description = "Start the messaging system (WhatsApp and/or Discord). Use when user asks to start messaging, activate auto-reply, or turn on message responses."
+description = "Start the messaging system (WhatsApp, Discord, and/or Instagram). Use when user asks to start messaging, activate auto-reply, or turn on message responses."
 [tools.function.parameters]
 type = "object"
 required = [ "platform",]
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord", "both",]
+enum = [ "whatsapp", "discord", "instagram", "both",]
 description = "Which platform to start"
 [[tools]]
 type = "function"
@@ -508,7 +548,7 @@ type = "object"
 required = [ "platform", "contact",]
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord",]
+enum = [ "whatsapp", "discord", "instagram",]
 description = "Platform for the contact"
 [tools.function.parameters.properties.contact]
 type = "string"
@@ -528,7 +568,7 @@ enum = [ "add", "remove", "list", "clear",]
 description = "Action to perform: add, remove, list, or clear"
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord",]
+enum = [ "whatsapp", "discord", "instagram",]
 description = "Platform (required for add/remove/clear, optional for list)"
 [tools.function.parameters.properties.contact]
 type = "string"
@@ -538,13 +578,13 @@ type = "function"
 
 [tools.function]
 name = "send_message"
-description = "Send a message to a contact on WhatsApp or Discord. Use when user wants to send a message like 'send hey to John', 'message Mom on WhatsApp', 'text Anas hello'."
+description = "Send a message to a contact on WhatsApp, Discord, or Instagram. The tool resolves fuzzy spoken names against your DM/contact list and asks for confirmation before first send."
 [tools.function.parameters]
 type = "object"
 required = [ "platform", "contact", "message",]
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord",]
+enum = [ "whatsapp", "discord", "instagram",]
 description = "Platform to send on"
 [tools.function.parameters.properties.contact]
 type = "string"
@@ -556,18 +596,54 @@ description = "Message to send"
 type = "function"
 
 [tools.function]
+name = "confirm_pending_message_send"
+description = "Confirm or cancel a pending contact match created by send_message. Use this when user says 'yes' or 'no' after a suggested contact."
+[tools.function.parameters]
+type = "object"
+required = [ "confirmation_id", "approve",]
+[tools.function.parameters.properties.confirmation_id]
+type = "string"
+description = "The confirmation_id returned by send_message"
+[tools.function.parameters.properties.approve]
+type = "boolean"
+description = "True to send, false to cancel"
+[tools.function.parameters.properties.remember_alias]
+type = "boolean"
+description = "If true, stores the spoken name alias for faster sends next time"
+[[tools]]
+type = "function"
+
+[tools.function]
 name = "get_last_message"
-description = "Get the last message received from a contact on WhatsApp or Discord. Use when user asks 'what did they say', 'read last message from X', 'show messages from Y', 'what was the last message'."
+description = "Get the LIVE latest message from a contact by directly querying the platform. Use when user asks to check DMs on a specific platform, e.g. 'check my Instagram', 'last WhatsApp message', 'any Discord DMs'."
 [tools.function.parameters]
 type = "object"
 required = [ "platform",]
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord",]
+enum = [ "whatsapp", "discord", "instagram",]
 description = "Platform to check"
 [tools.function.parameters.properties.contact]
 type = "string"
 description = "Contact name or number (optional - if not provided, returns last message from anyone)"
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "get_all_new_messages"
+description = "Get all new/unread messages across ALL platforms (WhatsApp, Discord, Instagram) at once. Use when user asks 'any new messages?', 'summarize all my messages', 'what did I miss?', 'check all platforms'. Reports per-platform and marks messages as seen so they won't repeat next time."
+[tools.function.parameters]
+type = "object"
+required = []
+[tools.function.parameters.properties.platform]
+type = "string"
+enum = [ "all", "whatsapp", "discord", "instagram",]
+description = "Which platform to check. Default is all."
+default = "all"
+[tools.function.parameters.properties.mark_as_read]
+type = "boolean"
+description = "If true (default), marks messages as reported so they won't show again."
+default = true
 [[tools]]
 type = "function"
 
@@ -594,7 +670,7 @@ type = "object"
 required = [ "platform", "contact_id", "context",]
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord",]
+enum = [ "whatsapp", "discord", "instagram",]
 description = "Platform to use"
 [tools.function.parameters.properties.contact_id]
 type = "string"
@@ -616,7 +692,7 @@ type = "string"
 description = "Name of the person leaving the message"
 [tools.function.parameters.properties.platform]
 type = "string"
-enum = [ "whatsapp", "discord",]
+enum = [ "whatsapp", "discord", "instagram",]
 description = "The platform the message was received on"
 [tools.function.parameters.properties.message_content]
 type = "string"

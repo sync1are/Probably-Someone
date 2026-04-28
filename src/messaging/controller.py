@@ -11,6 +11,7 @@ from src.messaging.response_generator import ResponseGenerator
 from src.messaging.history import MessagingHistory
 from src.messaging.config import (
     AUTO_REPLY_ENABLED,
+    REPLY_TO_ANYONE,
     VOICE_ENABLED,
     CONVERSATION_MEMORY,
     DISCORD_REPLY_DELAY_MS,
@@ -26,6 +27,7 @@ class MessagingController:
         self.response_generator = ResponseGenerator()
         self.history_manager = MessagingHistory()
         self.auto_reply_enabled = AUTO_REPLY_ENABLED
+        self.reply_to_anyone = REPLY_TO_ANYONE
         self.voice_enabled = VOICE_ENABLED
         self.pending_timers = {} # Store asyncio tasks
 
@@ -35,6 +37,8 @@ class MessagingController:
             "discord_messages_sent": 0,
             "whatsapp_messages_received": 0,
             "whatsapp_messages_sent": 0,
+            "instagram_messages_received": 0,
+            "instagram_messages_sent": 0,
             "total_ai_calls": 0
         }
 
@@ -99,15 +103,16 @@ class MessagingController:
         self.stats["discord_messages_received"] += 1
 
         # Check whitelist
-        is_dm = channel_id is None
-        if is_dm:
-            if not self.whitelist_manager.is_discord_user_allowed(user_id):
-                print(f"[Discord] Ignored message from non-whitelisted user: {user_name}")
-                return None
-        else:
-            if not self.whitelist_manager.is_discord_channel_allowed(channel_id):
-                print(f"[Discord] Ignored message from non-whitelisted channel: {channel_id}")
-                return None
+        if not self.reply_to_anyone:
+            is_dm = channel_id is None
+            if is_dm:
+                if not self.whitelist_manager.is_discord_user_allowed(user_id):
+                    print(f"[Discord] Ignored message from non-whitelisted user: {user_name}")
+                    return None
+            else:
+                if not self.whitelist_manager.is_discord_channel_allowed(channel_id):
+                    print(f"[Discord] Ignored message from non-whitelisted channel: {channel_id}")
+                    return None
 
         # Check if auto-reply is enabled
         if not self.auto_reply_enabled:
@@ -166,10 +171,11 @@ class MessagingController:
         self.stats["whatsapp_messages_received"] += 1
 
         # Check whitelist (by name or ID)
-        if not (self.whitelist_manager.is_whatsapp_contact_allowed(contact_id) or
-                self.whitelist_manager.is_whatsapp_contact_allowed(contact_name)):
-            print(f"[WhatsApp] Ignored message from non-whitelisted contact: {contact_name}")
-            return None
+        if not self.reply_to_anyone:
+            if not (self.whitelist_manager.is_whatsapp_contact_allowed(contact_id) or
+                    self.whitelist_manager.is_whatsapp_contact_allowed(contact_name)):
+                print(f"[WhatsApp] Ignored message from non-whitelisted contact: {contact_name}")
+                return None
 
         # Check if auto-reply is enabled
         if not self.auto_reply_enabled:
@@ -206,6 +212,68 @@ class MessagingController:
         await asyncio.sleep(delay_seconds)
 
         self.stats["whatsapp_messages_sent"] += 1
+        return reply
+
+    async def handle_instagram_message(
+        self,
+        message_content: str,
+        user_id: str,
+        user_name: str
+    ) -> Optional[str]:
+        """
+        Handle incoming Instagram message.
+
+        Args:
+            message_content: The message text
+            user_id: Instagram user ID
+            user_name: Instagram username
+
+        Returns:
+            AI-generated reply or None if not whitelisted
+        """
+        self.stats["instagram_messages_received"] += 1
+
+        # Check whitelist
+        if not self.reply_to_anyone:
+            if not self.whitelist_manager.is_instagram_user_allowed(user_id) and not self.whitelist_manager.is_instagram_user_allowed(user_name):
+                print(f"[Instagram] Ignored message from non-whitelisted user: {user_name} ({user_id})")
+                return None
+
+        # Check if auto-reply is enabled
+        if not self.auto_reply_enabled:
+            print(f"[Instagram] Auto-reply disabled, skipping message from {user_name}")
+            return None
+
+        print(f"[Instagram] Received message from {user_name}: {message_content[:50]}...")
+        # Cancel any pending follow-up timers for this user
+        self._cancel_timer("instagram", user_id)
+
+        # Generate AI response
+        self.stats["total_ai_calls"] += 1
+        reply = self.response_generator.generate_reply(
+            message=message_content,
+            platform="instagram",
+            contact_id=user_id,
+            contact_name=user_name
+        )
+
+        # Record interaction for autonomous mode
+        self.history_manager.record_interaction(
+            platform="instagram",
+            contact_id=user_id,
+            contact_name=user_name,
+            message=message_content,
+            reply=reply
+        )
+
+        # Start a follow-up timer if we expect a reply
+        self._check_and_start_timer(reply, "instagram", user_id, user_name)
+
+        # Simulate human-like delay (use discord delay for instagram for now)
+        delay_seconds = DISCORD_REPLY_DELAY_MS / 1000
+        await asyncio.sleep(delay_seconds)
+
+        self.stats["instagram_messages_sent"] += 1
         return reply
 
     async def initiate_conversation(
