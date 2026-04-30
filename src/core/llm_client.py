@@ -3,6 +3,7 @@
 from ollama import chat
 import json
 import os
+import re
 
 
 class LLMClient:
@@ -76,6 +77,14 @@ class LLMClient:
                 tool_call_id = last_tool_call_ids.pop(0) if last_tool_call_ids else "call_0"
                 msg['tool_call_id'] = tool_call_id
 
+            # FIX: OpenAI/NVIDIA NIM requires assistant message after tool result 
+            # and before any new user message.
+            if msg.get('role') == 'user' and prepared and prepared[-1].get('role') == 'tool':
+                prepared.append({
+                    "role": "assistant", 
+                    "content": "I have received the tool output. Processing now..."
+                })
+
             images = msg.pop('images', None)
             if images and isinstance(images, list):
                 # Convert standard content to a list of dicts for OpenAI vision format
@@ -114,18 +123,19 @@ class LLMClient:
         # Only send reasoning-suppression params for models that support them (e.g. Qwen)
         if "qwen" in model.lower():
             kwargs["extra_body"] = {
-                "chat_template_kwargs": {"enable_thinking": False},
+                "chat_template_kwargs": {"enable_thinking": True},
                 "reasoning_budget": 0,
             }
 
         if tools:
             kwargs["tools"] = tools
 
-        completion = self.oai_client.chat.completions.create(**kwargs)
-
         if stream:
+            kwargs["stream_options"] = {"include_usage": True}
+            completion = self.oai_client.chat.completions.create(**kwargs)
             return self._nvidia_stream_generator(completion)
         else:
+            completion = self.oai_client.chat.completions.create(**kwargs)
             choice = completion.choices[0]
             msg = choice.message
 
@@ -142,10 +152,41 @@ class LLMClient:
                     "function": {"name": tc.function.name, "arguments": args}
                 })
 
+            import re
+            content = msg.content or ""
+            # Check for inline <tool_call> in content if NIM missed it
+            if "<tool_call>" in content:
+                matches = re.finditer(r"<tool_call>(.*?)</tool_call>", content, flags=re.DOTALL)
+                for match in matches:
+                    call_text = match.group(1).strip()
+                    try:
+                        if call_text.startswith("{"):
+                            call_data = json.loads(call_text)
+                            normalized_tcs.append({
+                                "function": {
+                                    "name": call_data.get("name", ""),
+                                    "arguments": call_data.get("arguments", {})
+                                }
+                            })
+                        elif call_text.startswith("<function="):
+                            fn_match = re.search(r"<function=([^>]+)>(.*)$", call_text, flags=re.DOTALL)
+                            if fn_match:
+                                name = fn_match.group(1)
+                                args_text = fn_match.group(2).strip()
+                                normalized_tcs.append({
+                                    "function": {
+                                        "name": name,
+                                        "arguments": json.loads(args_text) if args_text else {}
+                                    }
+                                })
+                    except Exception:
+                        pass
+                content = re.sub(r"<tool_call>.*?</tool_call>", "", content, flags=re.DOTALL).strip()
+
             return {
                 "message": {
                     "role": msg.role,
-                    "content": msg.content or "",
+                    "content": content,
                     "tool_calls": normalized_tcs
                 }
             }
@@ -158,6 +199,15 @@ class LLMClient:
         tool_calls_dict = {}
 
         for chunk in completion:
+            # Check for usage information
+            if getattr(chunk, "usage", None):
+                yield {
+                    "prompt_eval_count": getattr(chunk.usage, "prompt_tokens", 0),
+                    "eval_count": getattr(chunk.usage, "completion_tokens", 0),
+                    "message": {"content": ""}
+                }
+                continue
+
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -192,6 +242,29 @@ class LLMClient:
             if in_tool_call:
                 # Wait until the closing tag arrives in the buffer
                 if "</tool_call>" in buffer:
+                    match = re.search(r"<tool_call>(.*?)</tool_call>", buffer, flags=re.DOTALL)
+                    if match:
+                        call_text = match.group(1).strip()
+                        try:
+                            if call_text.startswith("{"):
+                                call_data = json.loads(call_text)
+                                idx = len(tool_calls_dict)
+                                tool_calls_dict[idx] = {
+                                    "name": call_data.get("name", ""),
+                                    "arguments": json.dumps(call_data.get("arguments", {}))
+                                }
+                            elif call_text.startswith("<function="):
+                                fn_match = re.search(r"<function=([^>]+)>(.*)$", call_text, flags=re.DOTALL)
+                                if fn_match:
+                                    name = fn_match.group(1)
+                                    args_text = fn_match.group(2).strip()
+                                    idx = len(tool_calls_dict)
+                                    tool_calls_dict[idx] = {
+                                        "name": name,
+                                        "arguments": args_text if args_text else "{}"
+                                    }
+                        except Exception:
+                            pass
                     # Strip the complete block, keep any trailing text
                     buffer = re.sub(r"<tool_call>.*?</tool_call>", "", buffer, flags=re.DOTALL)
                     in_tool_call = False
@@ -200,8 +273,19 @@ class LLMClient:
                     continue  # Still accumulating the tag — don't yield yet
 
             if buffer and not in_tool_call:
-                yield {"message": {"content": buffer}}
-                buffer = ""
+                partial_match = False
+                tag = "<tool_call>"
+                for i in range(1, len(tag)):
+                    if buffer.endswith(tag[:i]):
+                        if buffer[:-i]:
+                            yield {"message": {"content": buffer[:-i]}}
+                        buffer = buffer[-i:]
+                        partial_match = True
+                        break
+                
+                if not partial_match:
+                    yield {"message": {"content": buffer}}
+                    buffer = ""
 
         # Flush remainder
         if buffer and not in_tool_call:

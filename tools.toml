@@ -105,7 +105,7 @@ type = "function"
 
 [tools.function]
 name = "write_file"
-description = "Create a new text or JSON file, or overwrite an existing one. Use when user says 'write this down in notes.txt', 'save this JSON data', 'create a file called...'."
+description = "Create a new text/JSON file OR overwrite an existing one ANYWHERE. Use when user says 'write this down in notes.txt', 'save this JSON data', 'create a file called...'."
 [tools.function.parameters]
 type = "object"
 required = [ "filename", "content",]
@@ -138,7 +138,7 @@ type = "function"
 
 [tools.function]
 name = "read_file"
-description = "Read the contents of a saved file. Use when user says 'what did I write in notes.txt', 'read data.json'."
+description = "Read the contents of ANY file on the system (using absolute/relative paths). Use when user says 'what did I write in notes.txt', 'read data.json'."
 [tools.function.parameters]
 type = "object"
 required = [ "filename",]
@@ -150,7 +150,7 @@ type = "function"
 
 [tools.function]
 name = "list_files"
-description = "List all files currently saved by the assistant. Use when user asks 'what files do you have saved?' or 'list my documents'."
+description = "List all files in a specific directory or the current working directory. Use when user asks 'what files do you have saved?' or 'list my documents'."
 [tools.function.parameters]
 type = "object"
 [[tools]]
@@ -270,7 +270,7 @@ type = "function"
 
 [tools.function]
 name = "switch_to_window"
-description = "Brings a specific window to the foreground and focuses it. Examples: 'switch to VS Code', 'go to Chrome'."
+description = "Brings a specific window to the foreground and focuses it. Examples: 'switch to VS Code', 'go to Chrome'. Recommended to use this before taking screenshots of inactive windows."
 [tools.function.parameters]
 type = "object"
 required = [ "title",]
@@ -314,7 +314,7 @@ type = "function"
 
 [tools.function]
 name = "take_screenshot"
-description = "Captures a screenshot of the entire screen. Use this when the user asks what's on their screen, to see their screen, or to help with something visible."
+description = "Captures a screenshot of the entire screen. Use this when the user asks what's on their screen, to see their screen, or to help with something visible. If the user asks about a specific application/window, you MUST call switch_to_window first, then call take_screenshot."
 [tools.function.parameters]
 type = "object"
 required = []
@@ -721,3 +721,19 @@ required = [ "status",]
 [tools.function.parameters.properties.status]
 type = "string"
 description = "The status description (e.g. 'Aze is on a coffee break')"
+
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "run_terminal_command"
+description = "Execute a command in PowerShell and return the output. Use this when you need to run arbitrary terminal commands on the host machine."
+[tools.function.parameters]
+type = "object"
+required = [ "command",]
+[tools.function.parameters.properties.command]
+type = "string"
+description = "The PowerShell command to execute"
+
+
+

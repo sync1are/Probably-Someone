@@ -809,15 +809,18 @@ def add_messaging_contact(platform, contact):
         elif platform == "discord":
             endpoint = "http://localhost:5000/whitelist/discord/add_user"
             data = {"user_id": contact}
+        elif platform == "instagram":
+            endpoint = None
+            data = None
         else:
             return {
                 "success": False,
                 "error": "Invalid platform",
-                "message": "Platform must be 'whatsapp' or 'discord'"
+                "message": "Platform must be 'whatsapp', 'discord', or 'instagram'"
             }
 
         # If HTTP server is running, use API
-        if _messaging_processes["http_server"]:
+        if endpoint and _messaging_processes["http_server"]:
             try:
                 response = requests.post(endpoint, json=data, timeout=2)
                 if response.status_code == 200:
@@ -1495,7 +1498,7 @@ def manage_whitelist(action, platform=None, contact=None):
             else:
                 return {
                     "success": False,
-                    "message": "Invalid platform. Use 'whatsapp' or 'discord'."
+                    "message": "Invalid platform. Use 'whatsapp', 'discord', or 'instagram'."
                 }
 
             with open(whitelist_file, 'w') as f:

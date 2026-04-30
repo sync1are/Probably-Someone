@@ -39,14 +39,29 @@ def _get_cached_llm(model: Optional[str] = None, base_url: Optional[str] = None)
     return _cached_llm
 
 
+def _is_edge_cdp_available(port: int = 9222) -> bool:
+    """Check if Edge is already running with CDP on the given port."""
+    import urllib.request
+    import urllib.error
+    try:
+        urllib.request.urlopen(f"http://localhost:{port}/json", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
 def start_edge_with_debugging() -> Dict[str, Any]:
     """
     Start Microsoft Edge with remote debugging enabled.
-
-    This mirrors the helper from the successful browser-use test script. The
-    browser-use agent can launch Chromium by itself, but this is useful when the
-    user wants an Edge instance ready for manual inspection.
+    Skips launch if Edge is already running with CDP.
     """
+    if _is_edge_cdp_available():
+        return {
+            "success": True,
+            "message": "Edge is already running with remote debugging on port 9222.",
+            "data": {"port": 9222},
+        }
+
     edge_paths = [
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
@@ -60,7 +75,21 @@ def start_edge_with_debugging() -> Dict[str, Any]:
         }
 
     try:
-        subprocess.Popen([edge_path, "--remote-debugging-port=9222"])
+        # Kill existing Edge processes so we can restart it with debugging enabled on the main profile
+        # This is necessary because Edge ignores the debugging flag if another instance is already running
+        os.system("taskkill /F /IM msedge.exe >nul 2>&1")
+        time.sleep(1)
+
+        user_data_dir = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data")
+
+        subprocess.Popen([
+            edge_path,
+            "--remote-debugging-port=9222",
+            f"--user-data-dir={user_data_dir}",
+            "--profile-directory=Default",
+            "--no-first-run",
+            "--restore-last-session",
+        ])
         time.sleep(3)
         return {
             "success": True,
@@ -86,13 +115,31 @@ async def _run_browser_agent(task: str, model: Optional[str], base_url: Optional
     if verbose:
         print(f"[browser_use] Using {llm.provider} model: {llm.name}")
 
-    browser_session = BrowserSession(
-        headless=False,
-        keep_alive=True,
-        wait_between_actions=0.2,
-        wait_for_network_idle_page_load_time=1.0,
-        minimum_wait_page_load_time=0.5,
-    )
+    if not _is_edge_cdp_available():
+        print("[browser_use] Attempting to start Edge with debugging enabled to preserve your logins...")
+        start_edge_with_debugging()
+        time.sleep(2)
+
+    # Connect to existing Edge session if available, otherwise spawn a new browser
+    if _is_edge_cdp_available():
+        print("[browser_use] Connecting to Edge session via CDP (port 9222)...")
+        browser_session = BrowserSession(
+            headless=False,
+            keep_alive=True,
+            cdp_url="http://localhost:9222",
+            wait_between_actions=0.2,
+            wait_for_network_idle_page_load_time=1.0,
+            minimum_wait_page_load_time=0.5,
+        )
+    else:
+        print("[browser_use] No existing Edge session found, launching new browser...")
+        browser_session = BrowserSession(
+            headless=False,
+            keep_alive=True,
+            wait_between_actions=0.2,
+            wait_for_network_idle_page_load_time=1.0,
+            minimum_wait_page_load_time=0.5,
+        )
 
     agent = Agent(
         task=task,
@@ -119,6 +166,8 @@ def browser_use_task(
 ) -> Dict[str, Any]:
     """
     Run a natural-language browser automation task using browser-use.
+    Automatically connects to your existing Edge session if available (port 9222),
+    preserving all your logins and cookies.
 
     Args:
         task: The browser task to complete.

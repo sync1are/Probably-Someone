@@ -7,6 +7,7 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, Any
+from .file_finder import find_file
 
 
 # Define the base directory for user files (e.g., Desktop or Documents)
@@ -14,17 +15,70 @@ from typing import Dict, Any
 USER_DOCS = Path(os.path.expanduser("~")) / "Documents" / "ARIA_Files"
 
 
-def _ensure_safe_path(filename: str) -> Path:
-    """Ensure the path is safe and inside the designated ARIA folder."""
-    # Create the directory if it doesn't exist
-    USER_DOCS.mkdir(parents=True, exist_ok=True)
+def _ask_permission(action: str, filepath: str) -> bool:
+    """Prompt the user for permission in the console to read/write a file."""
+    print(f"\n⚠️  ARIA is requesting permission to {action} the following file:")
+    print(f"   {filepath}")
+    while True:
+        try:
+            choice = input("   Allow this operation? (y/n): ").strip().lower()
+            if choice in ['y', 'yes']:
+                return True
+            elif choice in ['n', 'no']:
+                return False
+        except EOFError:
+            return False
 
-    # Prevent directory traversal attacks
-    safe_name = os.path.basename(filename)
-    if not safe_name:
-        safe_name = "untitled.txt"
 
-    return USER_DOCS / safe_name
+def _resolve_path(filename: str) -> Path:
+    """Resolve the absolute path. Allows access to any file on the system."""
+    # Check if filename is just a single file name without slashes
+    if os.sep not in filename and (os.altsep is None or os.altsep not in filename) and not Path(filename).is_absolute():
+        matches = find_file(filename)
+        
+        if matches is None:
+            print(f"\n⚠️  Could not determine the working directory to find '{filename}'.")
+            while True:
+                try:
+                    user_path = input("   Please provide the full path to the file: ").strip()
+                    if user_path:
+                        path = Path(user_path).expanduser().resolve()
+                        return path
+                except EOFError:
+                    break
+        elif len(matches) == 0:
+            print(f"\n⚠️  The file '{filename}' was not found in the current context.")
+            while True:
+                try:
+                    user_path = input("   Please provide the full path to the file: ").strip()
+                    if user_path:
+                        path = Path(user_path).expanduser().resolve()
+                        return path
+                except EOFError:
+                    break
+        elif len(matches) == 1:
+            path = Path(matches[0]).expanduser().resolve()
+            return path
+        else:
+            print(f"\n⚠️  Multiple matches found for '{filename}':")
+            for i, match in enumerate(matches, 1):
+                print(f"   {i}. {match}")
+            while True:
+                try:
+                    choice = input(f"   Please select by number (1-{len(matches)}) or provide a full path: ").strip()
+                    if choice.isdigit() and 1 <= int(choice) <= len(matches):
+                        path = Path(matches[int(choice) - 1]).expanduser().resolve()
+                        return path
+                    elif choice and not choice.isdigit():
+                        path = Path(choice).expanduser().resolve()
+                        return path
+                    else:
+                        print("   Invalid choice, please try again.")
+                except EOFError:
+                    break
+            
+    path = Path(filename).expanduser().resolve()
+    return path
 
 
 def write_file(filename: str, content: str, as_json: bool = False) -> Dict[str, Any]:
@@ -32,7 +86,7 @@ def write_file(filename: str, content: str, as_json: bool = False) -> Dict[str, 
     Write content to a file. Overwrites if it exists.
 
     Args:
-        filename (str): Name of the file (e.g., 'notes.txt' or 'data.json')
+        filename (str): Name of the file (can be absolute or relative path)
         content (str): The text or JSON string to write
         as_json (bool): Whether to format/validate the content as JSON
 
@@ -40,7 +94,15 @@ def write_file(filename: str, content: str, as_json: bool = False) -> Dict[str, 
         dict: Success status and message
     """
     try:
-        filepath = _ensure_safe_path(filename)
+        filepath = _resolve_path(filename)
+        
+        if not _ask_permission("WRITE TO", str(filepath)):
+            return {
+                "success": False,
+                "message": "Operation cancelled. User denied permission to write to the file."
+            }
+            
+        filepath.parent.mkdir(parents=True, exist_ok=True)
 
         if as_json:
             # Verify and format as valid JSON if requested
@@ -81,14 +143,22 @@ def append_to_file(filename: str, content: str) -> Dict[str, Any]:
     Append text to the end of an existing file.
 
     Args:
-        filename (str): Name of the file
+        filename (str): Name of the file (can be absolute or relative path)
         content (str): Text to add
 
     Returns:
         dict: Success status and message
     """
     try:
-        filepath = _ensure_safe_path(filename)
+        filepath = _resolve_path(filename)
+        
+        if not _ask_permission("APPEND TO", str(filepath)):
+            return {
+                "success": False,
+                "message": "Operation cancelled. User denied permission to append to the file."
+            }
+            
+        filepath.parent.mkdir(parents=True, exist_ok=True)
 
         # Add a newline if we're appending to an existing file
         prefix = "\n" if filepath.exists() and filepath.stat().st_size > 0 else ""
@@ -114,13 +184,19 @@ def read_file(filename: str) -> Dict[str, Any]:
     Read the contents of a file.
 
     Args:
-        filename (str): Name of the file to read
+        filename (str): Name of the file to read (can be absolute or relative path)
 
     Returns:
         dict: Success status, message, and file content
     """
     try:
-        filepath = _ensure_safe_path(filename)
+        filepath = _resolve_path(filename)
+        
+        if not _ask_permission("READ", str(filepath)):
+            return {
+                "success": False,
+                "message": "Operation cancelled. User denied permission to read the file."
+            }
 
         if not filepath.exists():
             return {
@@ -144,28 +220,44 @@ def read_file(filename: str) -> Dict[str, Any]:
         }
 
 
-def list_files() -> Dict[str, Any]:
+def list_files(directory: str = None) -> Dict[str, Any]:
     """
-    List all files managed by ARIA.
+    List all files in a specific directory. Defaults to the current working directory.
+
+    Args:
+        directory (str): The path to the directory to list
 
     Returns:
         dict: Success status and list of files
     """
     try:
-        USER_DOCS.mkdir(parents=True, exist_ok=True)
-        files = [f.name for f in USER_DOCS.iterdir() if f.is_file()]
+        dir_path = _resolve_path(directory) if directory else Path.cwd()
+        
+        if not _ask_permission("LIST DIRECTORY", str(dir_path)):
+            return {
+                "success": False,
+                "message": "Operation cancelled. User denied permission to list the directory."
+            }
+            
+        if not dir_path.exists() or not dir_path.is_dir():
+            return {
+                "success": False,
+                "message": f"Directory '{dir_path}' does not exist or is not a directory."
+            }
+
+        files = [f.name for f in dir_path.iterdir() if f.is_file()]
 
         if not files:
             return {
                 "success": True,
-                "message": "You don't have any saved files yet.",
+                "message": f"No files found in {dir_path}.",
                 "files": []
             }
 
         file_list_str = ", ".join(files)
         return {
             "success": True,
-            "message": f"You have {len(files)} files: {file_list_str}.",
+            "message": f"You have {len(files)} files in {dir_path}: {file_list_str}.",
             "files": files
         }
     except Exception as e:
@@ -194,22 +286,19 @@ def read_pdf(filename: str, page_start: int = 1, page_end: int = None) -> Dict[s
         return {"success": False, "message": "PyMuPDF is not installed. Please run 'pip install PyMuPDF'."}
 
     try:
-        # First check ARIA_Files folder
-        filepath = USER_DOCS / filename
-
-        # If not there, intelligently check the user's Downloads folder
-        if not filepath.exists():
-            downloads_dir = Path(os.path.expanduser("~")) / "Downloads"
-            filepath = downloads_dir / filename
-
-            # Try adding .pdf extension if missing
-            if not filepath.exists() and not filename.lower().endswith('.pdf'):
-                filepath = downloads_dir / f"{filename}.pdf"
+        # Resolve path
+        filepath = _resolve_path(filename)
+        
+        if not _ask_permission("READ PDF", str(filepath)):
+            return {
+                "success": False,
+                "message": "Operation cancelled. User denied permission to read the directory or file."
+            }
 
         if not filepath.exists():
             return {
                 "success": False,
-                "message": f"Could not find '{filename}' in your ARIA folder or Downloads folder."
+                "message": f"Could not find '{filename}' on the system."
             }
 
         # Open the PDF

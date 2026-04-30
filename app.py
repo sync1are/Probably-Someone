@@ -78,11 +78,19 @@ def stream_and_reconstruct(response_stream, audio_engine):
     """
     full_content = ""
     tool_calls = []
+    prompt_tokens = 0
+    eval_tokens = 0
     processor = StreamingTextProcessor(audio_engine)
     first_chunk = True
 
     for chunk in response_stream:
         msg = chunk.get('message', {})
+        
+        # Accumulate usage statistics if present
+        if 'prompt_eval_count' in chunk:
+            prompt_tokens += chunk['prompt_eval_count']
+        if 'eval_count' in chunk:
+            eval_tokens += chunk['eval_count']
 
         # Accumulate tool calls if they exist in the chunk
         if msg.get('tool_calls'):
@@ -109,7 +117,9 @@ def stream_and_reconstruct(response_stream, audio_engine):
     return {
         "role": "assistant",
         "content": cleaned_content,
-        "tool_calls": tool_calls if tool_calls else None
+        "tool_calls": tool_calls if tool_calls else None,
+        "prompt_tokens": prompt_tokens,
+        "eval_tokens": eval_tokens
     }
 
 
@@ -126,7 +136,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                              'spotify_like_current', 'spotify_unlike_current', 'set_system_volume',
                              'adjust_system_volume', 'toggle_system_mute', 'smart_media_control',
                              'set_system_brightness', 'adjust_system_brightness', 'minimize_window',
-                             'maximize_window', 'close_window', 'switch_to_window', 'show_desktop', 'open_application']
+                             'close_window', 'show_desktop']
     
     # Tools that need LLM for natural language responses
     llm_response_tools = ['spotify_play', 'spotify_add_to_queue', 'spotify_current_track',
@@ -140,6 +150,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     
     direct_responses = []
     needs_llm = False
+    screenshot_data = None
     
     for tool_call in message['tool_calls']:
         tool_name = tool_call['function']['name']
@@ -189,6 +200,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                 })
             elif tool_name == "take_screenshot" and 'image_base64' in tool_result:
                 needs_llm = True
+                screenshot_data = tool_result
                 # Add tool response
                 conversation_history.append({
                     'role': 'tool',
@@ -196,13 +208,6 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                         'success': True,
                         'message': f"Screenshot captured: {tool_result['width']}x{tool_result['height']}"
                     })
-                })
-                
-                # Add image for vision model
-                conversation_history.append({
-                    'role': 'user',
-                    'content': 'Analyze this screenshot.',
-                    'images': [tool_result['image_base64']]
                 })
             else:
                 conversation_history.append({
@@ -221,6 +226,14 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
                 'content': json.dumps(tool_result)
             })
     
+    # If a screenshot was taken, add the image for vision analysis AFTER all tool results
+    if screenshot_data:
+        conversation_history.append({
+            'role': 'user',
+            'content': 'Analyze this screenshot.',
+            'images': [screenshot_data['image_base64']]
+        })
+
     # If all were direct response tools (pause/skip/previous) and NONE failed, return direct responses
     if all_direct and direct_responses and not needs_llm:
         return None, '\n'.join(direct_responses), False
@@ -243,6 +256,7 @@ def process_tool_calls(message, conversation_history, llm_client, tools, audio_e
     final_response = llm_client.chat(
         model=DEFAULT_MODEL,
         messages=conversation_history,
+        tools=tools,
         stream=True
     )
 
@@ -382,12 +396,12 @@ def main():
                 # from a single stream — avoids a redundant second LLM call that
                 # NIM models (Mistral, etc.) reject when the last message is assistant.
                 message = stream_and_reconstruct(final_response, audio_engine)
-                conversation_history.append({
-                    'role': 'assistant',
-                    'content': message.get('content', '')
-                })
 
                 if not message.get('tool_calls'):
+                    conversation_history.append({
+                        'role': 'assistant',
+                        'content': message.get('content', '')
+                    })
                     audio_engine.signal_done()
                     break
                 else:
@@ -403,7 +417,15 @@ def main():
                 audio_engine.signal_done()
             
             _t_total = time.time() - _t_start
-            print(f"✓ Done  ({_t_first_token:.1f}s to first response · {_t_total:.1f}s total)\n")
+            
+            # Print token stats if available
+            p_tokens = message.get("prompt_tokens", 0)
+            e_tokens = message.get("eval_tokens", 0)
+            token_str = ""
+            if p_tokens or e_tokens:
+                token_str = f" · Tokens: {p_tokens} prompt / {e_tokens} compl"
+            
+            print(f"✓ Done  ({_t_first_token:.1f}s to first response · {_t_total:.1f}s total{token_str})\n")
     
     finally:
         audio_engine.shutdown()

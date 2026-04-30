@@ -5,6 +5,7 @@ import pyperclip
 import pygetwindow as gw
 import io
 import base64
+import subprocess
 
 
 def take_screenshot(mode="full"):
@@ -115,3 +116,32 @@ def get_active_window():
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+def run_terminal_command(command: str):
+    """
+    Executes a powershell command and returns the output.
+
+    Args:
+        command: The command to execute in PowerShell.
+
+    Returns:
+        dict: Success status, return code, stdout, and stderr.
+    """
+    try:
+        result = subprocess.run(
+            ["powershell", "-Command", command],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+            "returncode": result.returncode
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
