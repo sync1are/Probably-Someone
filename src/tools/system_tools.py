@@ -8,10 +8,13 @@ import base64
 import subprocess
 
 
-def take_screenshot(mode="full"):
+import os
+import time
+
+def take_screenshot(mode="full", save_to_disk=True):
     """
     Captures a screenshot of the entire screen.
-    Returns a base64-encoded image.
+    Returns a base64-encoded image and optionally a file path.
     """
     try:
         screenshot = pyautogui.screenshot()
@@ -19,12 +22,21 @@ def take_screenshot(mode="full"):
         # Convert to RGB (required for JPEG)
         screenshot = screenshot.convert("RGB")
         
+        # Save a high-quality version to disk if requested
+        filepath = None
+        if save_to_disk:
+            os.makedirs("temp", exist_ok=True)
+            filepath = os.path.abspath(f"temp/screenshot_{int(time.time())}.jpg")
+            screenshot.save(filepath, format='JPEG', quality=95)
+
         # Resize image to reduce base64 size for LLM (maintains aspect ratio)
-        screenshot.thumbnail((1280, 720))
+        # We use a copy for the thumbnail to not affect the saved file
+        llm_screenshot = screenshot.copy()
+        llm_screenshot.thumbnail((1280, 720))
         
-        # Convert to bytes as JPEG with lower quality
+        # Convert to bytes as JPEG with lower quality for LLM
         img_buffer = io.BytesIO()
-        screenshot.save(img_buffer, format='JPEG', quality=65, optimize=True)
+        llm_screenshot.save(img_buffer, format='JPEG', quality=65, optimize=True)
         img_bytes = img_buffer.getvalue()
         
         # Encode to base64
@@ -33,8 +45,10 @@ def take_screenshot(mode="full"):
         return {
             'success': True,
             'image_base64': img_base64,
+            'filepath': filepath,
             'width': screenshot.width,
-            'height': screenshot.height
+            'height': screenshot.height,
+            'message': f"Screenshot captured and saved to {filepath}" if filepath else "Screenshot captured"
         }
     except Exception as e:
         return {

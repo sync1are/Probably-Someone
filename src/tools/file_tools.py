@@ -96,7 +96,20 @@ def write_file(filename: str, content: str, as_json: bool = False) -> Dict[str, 
     try:
         filepath = _resolve_path(filename)
         
-        if not _ask_permission("WRITE TO", str(filepath)):
+        # Programmatic safety check for core codebase
+        protected_patterns = ['app.py', 'src/']
+        is_protected = any(p in str(filepath).replace('\\', '/') for p in protected_patterns)
+        
+        if is_protected:
+            print(f"\n🛑 CRITICAL SAFETY WARNING: ARIA is attempting to modify a CORE file:")
+            print(f"   {filepath}")
+            print(f"   Modifying this file could break the entire application.")
+            if not _ask_permission("OVERWRITE CORE FILE", str(filepath)):
+                return {
+                    "success": False,
+                    "message": "Access Denied. User refused to allow modification of core application files."
+                }
+        elif not _ask_permission("WRITE TO", str(filepath)):
             return {
                 "success": False,
                 "message": "Operation cancelled. User denied permission to write to the file."
@@ -152,7 +165,20 @@ def append_to_file(filename: str, content: str) -> Dict[str, Any]:
     try:
         filepath = _resolve_path(filename)
         
-        if not _ask_permission("APPEND TO", str(filepath)):
+        # Programmatic safety check for core codebase
+        protected_patterns = ['app.py', 'src/']
+        is_protected = any(p in str(filepath).replace('\\', '/') for p in protected_patterns)
+        
+        if is_protected:
+            print(f"\n🛑 CRITICAL SAFETY WARNING: ARIA is attempting to modify a CORE file:")
+            print(f"   {filepath}")
+            print(f"   Appending to this file could break the entire application.")
+            if not _ask_permission("APPEND TO CORE FILE", str(filepath)):
+                return {
+                    "success": False,
+                    "message": "Access Denied. User refused to allow modification of core application files."
+                }
+        elif not _ask_permission("APPEND TO", str(filepath)):
             return {
                 "success": False,
                 "message": "Operation cancelled. User denied permission to append to the file."

@@ -167,3 +167,27 @@ def show_desktop() -> Dict[str, Any]:
         return {"success": True, "message": f"Showed desktop (minimized {count} windows)."}
     except Exception as e:
         return {"success": False, "error": str(e), "message": "Failed to show desktop."}
+
+
+def close_all() -> Dict[str, Any]:
+    """
+    Close all visible application windows.
+
+    Returns:
+        dict: Success status and message
+    """
+    try:
+        import pygetwindow as gw
+        windows = gw.getAllWindows()
+        count = 0
+        for w in windows:
+            if w.title and w.visible and not w.isMinimized:
+                try:
+                    w.close()
+                    count += 1
+                except:
+                    pass
+
+        return {"success": True, "message": f"Attempted to close {count} windows."}
+    except Exception as e:
+        return {"success": False, "error": str(e), "message": "Failed to close all windows."}

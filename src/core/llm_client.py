@@ -123,7 +123,8 @@ class LLMClient:
         # Only send reasoning-suppression params for models that support them (e.g. Qwen)
         if "qwen" in model.lower():
             kwargs["extra_body"] = {
-                "chat_template_kwargs": {"enable_thinking": True},
+                
+                "chat_template_kwargs": {"enable_thinking": False},
                 "reasoning_budget": 0,
             }
 

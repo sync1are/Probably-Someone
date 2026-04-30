@@ -15,7 +15,7 @@ import dateutil.parser as parser
 
 # If modifying these scopes, delete the file token.json.
 # Using ReadOnly scope for security
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']
 
 # Paths
 CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'credentials.json')
@@ -256,3 +256,32 @@ def read_specific_email(email_id: str) -> Dict[str, Any]:
     except Exception as e:
         error_msg = f"An error occurred: {str(e)}"
         return {"success": False, "error": error_msg}
+
+
+def send_email(to: str, subject: str, body: str) -> Dict[str, Any]:
+    """
+    Sends an email using the user's Gmail account.
+    
+    Args:
+        to (str): Recipient email address.
+        subject (str): Subject of the email.
+        body (str): Body content of the email.
+        
+    Returns:
+        dict: Success status and message
+    """
+    try:
+        from email.mime.text import MIMEText
+        import base64
+        
+        service = _get_gmail_service()
+        message = MIMEText(body)
+        message['to'] = to
+        message['subject'] = subject
+        raw_msg = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        create_message = {'raw': raw_msg}
+        
+        service.users().messages().send(userId='me', body=create_message).execute()
+        return {'success': True, 'message': f'Email sent successfully to {to}.'}
+    except Exception as e:
+        return {'success': False, 'error': str(e), 'message': 'Failed to send email.'}

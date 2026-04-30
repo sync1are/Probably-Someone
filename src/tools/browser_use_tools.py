@@ -11,8 +11,8 @@ from typing import Any, Dict, Optional
 _cached_llm = None
 
 
-def _get_cached_llm(model: Optional[str] = None, base_url: Optional[str] = None):
-    """Create and reuse the Ollama chat model used by browser-use."""
+def _get_cached_llm(backend: str = "ollama", model: Optional[str] = None, base_url: Optional[str] = None):
+    """Create and reuse the chat model used by browser-use."""
     global _cached_llm
 
     if _cached_llm is None:
@@ -25,7 +25,7 @@ def _get_cached_llm(model: Optional[str] = None, base_url: Optional[str] = None)
             ) from exc
 
         _cached_llm = ChatOllama(
-            model=model or os.getenv("BROWSER_USE_MODEL", "qwen3.5:cloud"),
+            model=os.getenv("BROWSER_USE_MODEL", "qwen3.5:cloud"),
             host=base_url or os.getenv("OLLAMA_HOST", "http://localhost:11434"),
             ollama_options={
                 "temperature": 0.0,
@@ -100,7 +100,7 @@ def start_edge_with_debugging() -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to start Edge: {exc}"}
 
 
-async def _run_browser_agent(task: str, model: Optional[str], base_url: Optional[str], verbose: bool):
+async def _run_browser_agent(task: str, backend: str, model: Optional[str], base_url: Optional[str], verbose: bool, headless: bool = False):
     try:
         from browser_use import Agent
         from browser_use.browser.session import BrowserSession
@@ -110,36 +110,19 @@ async def _run_browser_agent(task: str, model: Optional[str], base_url: Optional
             "'playwright install chromium'."
         ) from exc
 
-    llm = _get_cached_llm(model=model, base_url=base_url)
+    llm = _get_cached_llm(backend=backend, model=model, base_url=base_url)
 
     if verbose:
         print(f"[browser_use] Using {llm.provider} model: {llm.name}")
 
-    if not _is_edge_cdp_available():
-        print("[browser_use] Attempting to start Edge with debugging enabled to preserve your logins...")
-        start_edge_with_debugging()
-        time.sleep(2)
-
-    # Connect to existing Edge session if available, otherwise spawn a new browser
-    if _is_edge_cdp_available():
-        print("[browser_use] Connecting to Edge session via CDP (port 9222)...")
-        browser_session = BrowserSession(
-            headless=False,
-            keep_alive=True,
-            cdp_url="http://localhost:9222",
-            wait_between_actions=0.2,
-            wait_for_network_idle_page_load_time=1.0,
-            minimum_wait_page_load_time=0.5,
-        )
-    else:
-        print("[browser_use] No existing Edge session found, launching new browser...")
-        browser_session = BrowserSession(
-            headless=False,
-            keep_alive=True,
-            wait_between_actions=0.2,
-            wait_for_network_idle_page_load_time=1.0,
-            minimum_wait_page_load_time=0.5,
-        )
+    print("[browser_use] Launching fresh browser session...")
+    browser_session = BrowserSession(
+        headless=False,
+        keep_alive=True,
+        wait_between_actions=0.2,
+        wait_for_network_idle_page_load_time=1.0,
+        minimum_wait_page_load_time=0.5,
+    )
 
     agent = Agent(
         task=task,
@@ -158,11 +141,13 @@ async def _run_browser_agent(task: str, model: Optional[str], base_url: Optional
     return await agent.run(max_steps=25)
 
 
-def browser_use_task(
+async def browser_use_task(
     task: str,
     model: Optional[str] = None,
     base_url: Optional[str] = None,
     verbose: bool = False,
+    backend: str = "ollama",
+    headless: bool = False,
 ) -> Dict[str, Any]:
     """
     Run a natural-language browser automation task using browser-use.
@@ -182,13 +167,13 @@ def browser_use_task(
     print(f"[browser_use] Task started at {time.strftime('%H:%M:%S')}")
 
     try:
-        result = asyncio.run(
-            _run_browser_agent(
-                task=task.strip(),
-                model=model,
-                base_url=base_url,
-                verbose=verbose,
-            )
+        result = await _run_browser_agent(
+            task=task.strip(),
+            backend=backend,
+            model=model,
+            base_url=base_url,
+            verbose=verbose,
+            headless=headless,
         )
     except RuntimeError as exc:
         return {"success": False, "error": str(exc)}

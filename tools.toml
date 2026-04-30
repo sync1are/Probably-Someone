@@ -3,23 +3,13 @@ type = "function"
 
 [tools.function]
 name = "browser_use_task"
-description = "Use browser-use to control a real browser and complete multi-step web tasks such as opening sites, searching, clicking, playing videos, filling forms, or navigating pages. Use this for browser actions that require seeing and interacting with webpages, not just opening a search page."
+description = "CRITICAL: ALWAYS use this tool for ANY web navigation, searching, finding items, or interacting with webpages. DO NOT manually use open_application, take_screenshot, or switch_to_window to interact with browsers. Use this tool to autonomously control the browser, find information, take web screenshots, and complete complex multi-step web tasks."
 [tools.function.parameters]
 type = "object"
 required = [ "task",]
 [tools.function.parameters.properties.task]
 type = "string"
 description = "Detailed natural-language browser automation task to complete"
-[tools.function.parameters.properties.model]
-type = "string"
-description = "Optional Ollama model override for browser-use. Defaults to BROWSER_USE_MODEL or qwen3.5:cloud."
-[tools.function.parameters.properties.base_url]
-type = "string"
-description = "Optional Ollama base URL override. Defaults to OLLAMA_HOST or http://localhost:11434."
-[tools.function.parameters.properties.verbose]
-type = "boolean"
-description = "If true, performs a direct LLM test before running the browser task."
-default = false
 [[tools]]
 type = "function"
 
@@ -737,3 +727,33 @@ description = "The PowerShell command to execute"
 
 
 
+
+
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "send_email"
+description = "Send an email."
+[tools.function.parameters]
+type = "object"
+required = ["to", "subject", "body"]
+[tools.function.parameters.properties.to]
+type = "string"
+description = "Recipient email address"
+[tools.function.parameters.properties.subject]
+type = "string"
+description = "Subject of the email"
+[tools.function.parameters.properties.body]
+type = "string"
+description = "The plain text body of the email"
+
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "close_all"
+description = "Close all visible application windows."
+[tools.function.parameters]
+type = "object"
+required = []

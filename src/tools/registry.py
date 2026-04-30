@@ -38,6 +38,7 @@ from src.tools.window_tools import (
     minimize_window,
     maximize_window,
     close_window,
+    close_all,
     switch_to_window,
     show_desktop
 )
@@ -69,7 +70,8 @@ from src.tools.messaging_tools import (
 )
 from src.tools.gmail_tools import (
     get_important_unread_emails,
-    read_specific_email
+    read_specific_email,
+    send_email
 )
 
 from src.tools.news_tools import get_latest_news
@@ -79,6 +81,7 @@ TOOL_HANDLERS = {
     # Gmail tools
     "get_important_unread_emails": get_important_unread_emails,
     "read_specific_email": read_specific_email,
+    "send_email": send_email,
 
     # System tools
     "take_screenshot": take_screenshot,
@@ -105,6 +108,7 @@ TOOL_HANDLERS = {
     "minimize_window": minimize_window,
     "maximize_window": maximize_window,
     "close_window": close_window,
+    "close_all": close_all,
     "switch_to_window": switch_to_window,
     "show_desktop": show_desktop,
 
@@ -150,13 +154,16 @@ TOOL_HANDLERS = {
 }
 
 
-def execute_tool(tool_name, arguments):
+async def execute_tool(tool_name, arguments, backend=None, model=None, headless=True):
     """
     Execute a tool by name with given arguments.
     
     Args:
         tool_name (str): Name of the tool to execute
         arguments (dict): Arguments to pass to the tool
+        backend (str): Optional backend context
+        model (str): Optional model context
+        headless (bool): Optional browser visibility preference
     
     Returns:
         dict: Tool execution result with success status
@@ -175,14 +182,32 @@ def execute_tool(tool_name, arguments):
             p.kind == inspect.Parameter.VAR_KEYWORD
             for p in sig.parameters.values()
         )
+        
+        # Inject context if the handler accepts them
+        valid_params = set(sig.parameters.keys())
+        if "backend" in valid_params:
+            arguments["backend"] = backend
+        if "model_name" in valid_params:
+            arguments["model_name"] = model
+        elif "model" in valid_params:
+            arguments["model"] = model
+        if "headless" in valid_params:
+            arguments["headless"] = headless
+
         if not accepts_var_kwargs:
-            valid_params = set(sig.parameters.keys())
             filtered = {k: v for k, v in arguments.items() if k in valid_params}
             if filtered != arguments:
                 dropped = set(arguments.keys()) - valid_params
-                print(f"  [Registry] Dropped unknown kwargs for {tool_name}: {dropped}")
+                # Don't print for internal context injects
+                dropped = dropped - {"backend", "model", "model_name", "headless"}
+                if dropped:
+                    print(f"  [Registry] Dropped unknown kwargs for {tool_name}: {dropped}")
             arguments = filtered
 
-        return handler(**arguments)
+        # Handle both sync and async handlers
+        if inspect.iscoroutinefunction(handler):
+            return await handler(**arguments)
+        else:
+            return handler(**arguments)
     except Exception as e:
         return {"success": False, "error": f"Error executing {tool_name}: {str(e)}"}
