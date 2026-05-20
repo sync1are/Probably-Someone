@@ -90,3 +90,4 @@ messaging/messaging_whitelist.json
 messaging/messaging_history.json.bak
 *.html
 launch_terminals.bat
+temp

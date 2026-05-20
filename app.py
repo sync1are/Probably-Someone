@@ -101,6 +101,15 @@ async def main():
     # Start Discord Bridge
     init_discord(backend=backend, model=DEFAULT_MODEL)
 
+    print(f"📡 Testing connection to {backend} backend...")
+    try:
+        test_msg = [{"role": "user", "content": "ping"}]
+        test_res = agent.llm_client.chat(model=DEFAULT_MODEL, messages=test_msg, stream=False)
+        if test_res:
+            print(f"✓ Backend connection successful")
+    except Exception as e:
+        print(f"⚠️ Backend connection test failed: {e}")
+
     print("🤖 ARIA Voice Assistant Started!")
     print("🎙️ Hold [Ctrl + Shift] anytime to speak")
     print("📸 Screenshot tool enabled")

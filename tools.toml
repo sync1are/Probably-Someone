@@ -3,7 +3,7 @@ type = "function"
 
 [tools.function]
 name = "browser_use_task"
-description = "CRITICAL: ALWAYS use this tool for ANY web navigation, searching, finding items, or interacting with webpages. DO NOT manually use open_application, take_screenshot, or switch_to_window to interact with browsers. Use this tool to autonomously control the browser, find information, take web screenshots, and complete complex multi-step web tasks."
+description = "CRITICAL: ALWAYS use this tool for ANY web navigation, searching, finding items, or interacting with webpages. DO NOT manually use open_application or switch_to_window to interact with browsers. Use this tool to autonomously control the browser — navigate, search, click, and complete complex multi-step web tasks. IMPORTANT: Do NOT include screenshot, save, pin, send, share, or download instructions in the task — the browser agent cannot take screenshots. Screenshots are captured separately by take_screenshot after this tool finishes."
 [tools.function.parameters]
 type = "object"
 required = [ "task",]
@@ -304,7 +304,7 @@ type = "function"
 
 [tools.function]
 name = "take_screenshot"
-description = "Captures a screenshot of the entire screen. Use this when the user asks what's on their screen, to see their screen, or to help with something visible. If the user asks about a specific application/window, you MUST call switch_to_window first, then call take_screenshot."
+description = "Captures a screenshot of the browser viewport via CDP (works even when browser is behind other windows — do NOT call switch_to_window first). Use when the user asks to see what's on their screen, or to capture and send browser content. For multi-image Discord requests (e.g. 'screenshot each pfp and send here'), call browser_use_task to open each image individually, then call take_screenshot after each one — the Discord bridge will automatically upload each screenshot to the channel."
 [tools.function.parameters]
 type = "object"
 required = []
@@ -532,17 +532,38 @@ type = "function"
 
 [tools.function]
 name = "add_messaging_contact"
-description = "Add a contact to the messaging whitelist. Use when user wants to add someone to auto-reply list. IMPORTANT: only use the two parameters below â€” 'platform' and 'contact'. Do NOT invent or add extra parameters like 'contact_name' or 'name'."
+description = "Search and prepare to add a contact to the messaging whitelist. Use when user wants to add someone to auto-reply list. If no platform is specified, it will search across all platforms and return candidates."
 [tools.function.parameters]
 type = "object"
-required = [ "platform", "contact",]
-[tools.function.parameters.properties.platform]
-type = "string"
-enum = [ "whatsapp", "discord", "instagram",]
-description = "Platform for the contact"
+required = [ "contact",]
 [tools.function.parameters.properties.contact]
 type = "string"
-description = "Phone number for WhatsApp or Discord user ID for Discord. If the user also gives a name/label for the contact, just use the ID/number here â€” names are stored separately."
+description = "Contact name, username, phone number, or user ID to search for."
+[tools.function.parameters.properties.platform]
+type = "string"
+enum = [ "whatsapp", "discord", "instagram", "all"]
+description = "Platform for the contact. Omit or pass 'all' to search everywhere."
+
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "confirm_whitelist_match"
+description = "Confirm or cancel a pending contact match created by add_messaging_contact. Use this when user says 'yes' or 'no' after a suggested whitelist contact is found. You can selectively add them if multiple platforms match."
+[tools.function.parameters]
+type = "object"
+required = [ "confirmation_id", "approve",]
+[tools.function.parameters.properties.confirmation_id]
+type = "string"
+description = "The confirmation_id string returned by add_messaging_contact"
+[tools.function.parameters.properties.approve]
+type = "boolean"
+description = "True if user confirmed, False to cancel"
+[tools.function.parameters.properties.platforms]
+type = "array"
+description = "List of approved platforms to add to (e.g. ['discord', 'instagram']). Leave empty to approve all matches."
+items = { type = "string" }
+
 [[tools]]
 type = "function"
 
@@ -747,6 +768,19 @@ description = "Subject of the email"
 [tools.function.parameters.properties.body]
 type = "string"
 description = "The plain text body of the email"
+
+[[tools]]
+type = "function"
+
+[tools.function]
+name = "open_file_in_notepad"
+description = "Open an existing file in Windows Notepad. Opens the file visually so the user can read it. Use when the user says 'open this file', 'show it in notepad', 'open xyz in notepad', 'open the text file you just created'."
+[tools.function.parameters]
+type = "object"
+required = [ "filename",]
+[tools.function.parameters.properties.filename]
+type = "string"
+description = "Name or path of the file to open"
 
 [[tools]]
 type = "function"

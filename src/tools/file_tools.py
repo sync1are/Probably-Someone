@@ -4,6 +4,7 @@ Allows the AI to create, read, write, and manage text or JSON files.
 """
 
 import os
+import sys
 import json
 from pathlib import Path
 from typing import Dict, Any
@@ -16,7 +17,18 @@ USER_DOCS = Path(os.path.expanduser("~")) / "Documents" / "ARIA_Files"
 
 
 def _ask_permission(action: str, filepath: str) -> bool:
-    """Prompt the user for permission in the console to read/write a file."""
+    """Prompt the user for permission in the console to read/write a file.
+
+    Skips prompt and auto-grants if there's no TTY (e.g. running headlessly via Discord).
+    """
+    # Auto-grant when no interactive terminal is available
+    try:
+        is_tty = os.isatty(sys.stdin.fileno())
+    except (AttributeError, OSError):
+        is_tty = False
+    if not is_tty:
+        print(f"[ARIA] Auto-granting {action} permission for: {filepath}")
+        return True
     print(f"\n⚠️  ARIA is requesting permission to {action} the following file:")
     print(f"   {filepath}")
     while True:
@@ -30,12 +42,23 @@ def _ask_permission(action: str, filepath: str) -> bool:
             return False
 
 
-def _resolve_path(filename: str) -> Path:
-    """Resolve the absolute path. Allows access to any file on the system."""
+def _resolve_path(filename: str, create_new: bool = False) -> Path:
+    """Resolve the absolute path. Allows access to any file on the system.
+
+    Args:
+        filename: The filename or path to resolve.
+        create_new: If True, skip the existence check and return a default path
+                    for a new file. Use this when writing a new file.
+    """
     # Check if filename is just a single file name without slashes
     if os.sep not in filename and (os.altsep is None or os.altsep not in filename) and not Path(filename).is_absolute():
+        # For creating a new file, write directly to ARIA_Files without searching
+        if create_new:
+            filepath = USER_DOCS / filename
+            return filepath
+
         matches = find_file(filename)
-        
+
         if matches is None:
             print(f"\n⚠️  Could not determine the working directory to find '{filename}'.")
             while True:
@@ -76,7 +99,7 @@ def _resolve_path(filename: str) -> Path:
                         print("   Invalid choice, please try again.")
                 except EOFError:
                     break
-            
+
     path = Path(filename).expanduser().resolve()
     return path
 
@@ -94,7 +117,8 @@ def write_file(filename: str, content: str, as_json: bool = False) -> Dict[str, 
         dict: Success status and message
     """
     try:
-        filepath = _resolve_path(filename)
+        # Pass create_new=True so the file doesn't need to exist first
+        filepath = _resolve_path(filename, create_new=True)
         
         # Programmatic safety check for core codebase
         protected_patterns = ['app.py', 'src/']
@@ -291,6 +315,38 @@ def list_files(directory: str = None) -> Dict[str, Any]:
             "success": False,
             "error": str(e),
             "message": "Failed to list files."
+        }
+
+
+def open_file_in_notepad(filename: str) -> Dict[str, Any]:
+    """
+    Open a file in Notepad. Safe, non-destructive — just launches Notepad with the file.
+
+    Args:
+        filename (str): Name of the file to open (can be absolute or relative path)
+
+    Returns:
+        dict: Success status and message
+    """
+    import subprocess
+    try:
+        filepath = _resolve_path(filename, create_new=True)
+        if not filepath.exists():
+            return {
+                "success": False,
+                "message": f"File not found: {filepath}. Create it first with write_file."
+            }
+        subprocess.Popen(["notepad.exe", str(filepath)])
+        return {
+            "success": True,
+            "message": f"Opened {filepath} in Notepad.",
+            "data": {"filepath": str(filepath)}
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to open {filename} in Notepad."
         }
 
 

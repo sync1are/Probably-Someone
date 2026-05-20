@@ -120,6 +120,33 @@ app.get('/messages', (req, res) => {
     return res.json({ success: true, messages: recent, total: filtered.length });
 });
 
+// GET /unread - return unread messages directly from whatsapp-web.js
+app.get('/unread', async (req, res) => {
+    try {
+        const chats = await client.getChats();
+        const unreadChats = chats.filter(c => c.unreadCount > 0);
+        const unreadMsgs = [];
+        
+        for (const chat of unreadChats.slice(0, 10)) {
+            const messages = await chat.fetchMessages({ limit: chat.unreadCount });
+            for (const msg of messages) {
+                if (!msg.fromMe) {
+                    const contact = await msg.getContact();
+                    unreadMsgs.push({
+                        contact: contact.name || contact.pushname || contact.number || 'Unknown',
+                        body: msg.body,
+                        timestamp: msg.timestamp * 1000
+                    });
+                }
+            }
+        }
+        res.json({ success: true, messages: unreadMsgs });
+    } catch (e) {
+        console.error('Error fetching unread messages:', e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // GET /contacts - return DM/chat contacts to help fuzzy name matching
 app.get('/contacts', async (req, res) => {
     try {

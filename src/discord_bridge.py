@@ -192,6 +192,14 @@ class DiscordAgentBridge:
                 if filepath and os.path.exists(filepath):
                     await message.channel.send(file=discord.File(filepath))
             
+            elif name == "scrape_browser_images" and result.get("success"):
+                filepaths = result.get("filepaths", [])
+                files = [discord.File(fp) for fp in filepaths if os.path.exists(fp)]
+                if files:
+                    # Discord allows max 10 files per message
+                    for i in range(0, len(files), 10):
+                        await message.channel.send(files=files[i:i+10])
+            
             await update_status("🔍 Thinking...")
 
         async def permission_callback(name, args):
@@ -269,6 +277,9 @@ def init_discord(backend="ollama", model=None):
         print("[Discord] Warning: Missing DISCORD_TOKEN or DISCORD_USER_ID in .env. Skipping discord bridge.")
         return
 
+    ready_event = threading.Event()
+    bot_user = [None]
+
     def run_bot():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -281,7 +292,8 @@ def init_discord(backend="ollama", model=None):
 
         @bot.event
         async def on_ready():
-            print(f"[Discord] Online as {bot.user}")
+            bot_user[0] = str(bot.user)
+            ready_event.set()
             await bot.change_presence(activity=discord.Game(name="Direct Access Mode 🛠"))
 
         @bot.event
@@ -296,7 +308,17 @@ def init_discord(backend="ollama", model=None):
             # Process all messages from the user as AI queries
             await bridge.handle_message(message)
 
-        bot.run(DISCORD_TOKEN, log_handler=None)
+        try:
+            bot.run(DISCORD_TOKEN, log_handler=None)
+        except Exception as e:
+            ready_event.set()
 
+    print("🔊 Connecting to Discord...")
     t = threading.Thread(target=run_bot, daemon=True, name="DiscordBridge")
     t.start()
+
+    if ready_event.wait(timeout=10.0):
+        if bot_user[0]:
+            print(f"✓ Connected to Discord as {bot_user[0]}")
+    else:
+        print("⚠️ Discord bridge is taking a while to connect, running in background...")

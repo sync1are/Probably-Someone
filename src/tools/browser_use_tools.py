@@ -100,6 +100,48 @@ def start_edge_with_debugging() -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to start Edge: {exc}"}
 
 
+def _wait_for_cdp(port: int, retries: int = 12, delay: float = 1.0) -> bool:
+    """Poll CDP endpoint with retries. Returns True as soon as it responds."""
+    for attempt in range(retries):
+        if _is_edge_cdp_available(port):
+            return True
+        print(f"[browser_use] Waiting for Edge CDP... ({attempt + 1}/{retries})")
+        time.sleep(delay)
+    return False
+
+
+def _strip_screenshot_instructions(task: str) -> str:
+    """
+    Remove screenshot, send, save, pin, and share instructions from a task
+    before passing to browser-use.
+
+    Reasons:
+    - browser-use has no bare 'screenshot' action → Pydantic crash.
+    - Phrases like 'send them here' cause browser-use to click Pinterest's
+      own Save/Send/Share buttons instead of just browsing.
+    - Screenshots are taken by ARIA's own take_screenshot tool after the
+      browser task returns.
+    """
+    import re
+    patterns = [
+        # Screenshot phrases (with optional send/share suffix)
+        r",?\s*(?:then\s+)?(?:take\s+a?\s*|capture\s+a?\s*|grab\s+a?\s*)?screenshots?\s+(?:of\s+(?:them|it|the\s+results?|the\s+page))?\s*(?:and\s+(?:send|share)\s+(?:them|it)\s+(?:here|to\s+me))?",
+        r"(?:take\s+a?\s*|capture\s+a?\s*|grab\s+a?\s*)?screenshots?\s+(?:of\s+(?:them|it|the\s+results?|the\s+page))\s*",
+        r"screenshot\s+them\b",
+        # Standalone send/share/save instructions (these trigger site UI buttons)
+        r",?\s*(?:and\s+)?(?:then\s+)?(?:send|share|forward)\s+(?:them|it|the\s+(?:results?|images?|photos?|pics?))\s+(?:here|to\s+me|to\s+discord)\s*",
+        r",?\s*(?:and\s+)?(?:then\s+)?(?:save|pin|bookmark|download)\s+(?:them|it|the\s+(?:results?|images?|photos?|pics?))\b",
+        r"send\s+them\s+here\b",
+        r"send\s+it\s+here\b",
+    ]
+    stripped = task
+    for p in patterns:
+        stripped = re.sub(p, " ", stripped, flags=re.IGNORECASE)
+    stripped = re.sub(r"\s{2,}", " ", stripped).strip().rstrip(".,;")
+    print(f"[browser_use] Task sanitized for browser: {stripped!r}")
+    return stripped
+
+
 async def _run_browser_agent(task: str, backend: str, model: Optional[str], base_url: Optional[str], verbose: bool, headless: bool = False):
     try:
         from browser_use import Agent
@@ -115,17 +157,47 @@ async def _run_browser_agent(task: str, backend: str, model: Optional[str], base
     if verbose:
         print(f"[browser_use] Using {llm.provider} model: {llm.name}")
 
-    print("[browser_use] Launching fresh browser session...")
-    browser_session = BrowserSession(
-        headless=False,
-        keep_alive=True,
-        wait_between_actions=0.2,
-        wait_for_network_idle_page_load_time=1.0,
-        minimum_wait_page_load_time=0.5,
-    )
+    # Strip screenshot instructions — handled by ARIA's take_screenshot tool, not browser-use
+    clean_task = _strip_screenshot_instructions(task)
+
+    # --- Strategy 1: Connect to existing Edge with CDP (preserves logins/cookies) ---
+    cdp_port = int(os.getenv("EDGE_CDP_PORT", "9222"))
+    if _is_edge_cdp_available(cdp_port):
+        print(f"[browser_use] Connecting to existing Edge session via CDP on port {cdp_port}...")
+        browser_session = BrowserSession(
+            cdp_url=f"http://localhost:{cdp_port}",
+            keep_alive=True,
+            wait_between_actions=0.2,
+            wait_for_network_idle_page_load_time=1.0,
+            minimum_wait_page_load_time=0.5,
+        )
+    else:
+        # --- Strategy 2: Launch Edge with debugging using user's real profile ---
+        print("[browser_use] Edge CDP not found. Launching Edge with your profile and remote debugging...")
+        launch_result = start_edge_with_debugging()
+        # Poll with retries — Edge can take several seconds to expose its CDP port
+        if launch_result.get("success") and _wait_for_cdp(cdp_port, retries=12, delay=1.0):
+            print(f"[browser_use] Edge is up. Connecting via CDP on port {cdp_port}...")
+            browser_session = BrowserSession(
+                cdp_url=f"http://localhost:{cdp_port}",
+                keep_alive=True,
+                wait_between_actions=0.2,
+                wait_for_network_idle_page_load_time=1.0,
+                minimum_wait_page_load_time=0.5,
+            )
+        else:
+            # --- Strategy 3: Fresh Chromium fallback (no logins) ---
+            print("[browser_use] Could not reach Edge CDP. Falling back to fresh Chromium session.")
+            browser_session = BrowserSession(
+                headless=headless,
+                keep_alive=True,
+                wait_between_actions=0.2,
+                wait_for_network_idle_page_load_time=1.0,
+                minimum_wait_page_load_time=0.5,
+            )
 
     agent = Agent(
-        task=task,
+        task=clean_task,
         llm=llm,
         browser_session=browser_session,
         use_thinking=False,
@@ -133,9 +205,17 @@ async def _run_browser_agent(task: str, backend: str, model: Optional[str], base
         enable_planning=False,
         step_timeout=60,
         extend_system_message=(
-            "When the requested visible browser action is complete, such as a YouTube video "
-            "starting playback, immediately mark the task done. Do not keep observing or "
-            "verifying after the visible goal has been achieved."
+            "CRITICAL RULES — follow these without exception:\n"
+            "1. NEVER click Save, Pin, Bookmark, Download, Share, or Send buttons on ANY website. "
+            "These are site-internal actions that will modify data and are strictly forbidden. "
+            "On Pinterest specifically, do NOT click the red Save button, the send arrow, "
+            "or any share/download icon.\n"
+            "2. Do NOT attempt to take a screenshot or return screenshot data as an action. "
+            "You have no screenshot action. Screenshots are handled externally after you finish.\n"
+            "3. Your ONLY job is to NAVIGATE and BROWSE. Open pages, search, click images to "
+            "view them full-size — then call done with a text summary once the image is visible.\n"
+            "4. When the requested navigation is visually complete, call done immediately. "
+            "Do not linger, re-verify, or take extra actions."
         ),
     )
     return await agent.run(max_steps=25)

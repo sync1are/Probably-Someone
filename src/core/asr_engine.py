@@ -64,9 +64,13 @@ class ASREngine:
         sys.stdout.write("\r\033[K🎙️ Listening: ...")
         sys.stdout.flush()
 
+        base_dir = Path(__file__).parent.parent.parent
+        venv_python = base_dir / "venv" / "Scripts" / "python.exe"
+        script_path = base_dir / "python-clients" / "scripts" / "asr" / "transcribe_mic.py"
+
         command = [
-            r"D:\parakeet\venv\Scripts\python.exe", "-u",
-            r"D:\VERISON 3\python-clients\scripts\asr\transcribe_mic.py",
+            str(venv_python) if venv_python.exists() else sys.executable, "-u",
+            str(script_path),
             "--server", self.server,
             "--use-ssl",
             "--metadata", "function-id", NVIDIA_FUNCTION_ID,

@@ -4,6 +4,7 @@ import inspect
 
 from src.tools.system_tools import (
     take_screenshot,
+    scrape_browser_images,
     get_clipboard,
     set_clipboard,
     get_active_window
@@ -47,7 +48,8 @@ from src.tools.file_tools import (
     append_to_file,
     read_file,
     list_files,
-    read_pdf
+    read_pdf,
+    open_file_in_notepad
 )
 from src.tools.messaging_tools import (
     setup_whatsapp,
@@ -57,6 +59,7 @@ from src.tools.messaging_tools import (
     stop_messaging,
     messaging_status,
     add_messaging_contact,
+    confirm_whitelist_match,
     manage_whitelist,
     send_message,
     get_last_message,
@@ -85,6 +88,7 @@ TOOL_HANDLERS = {
 
     # System tools
     "take_screenshot": take_screenshot,
+    "scrape_browser_images": scrape_browser_images,
     "get_clipboard": get_clipboard,
     "set_clipboard": set_clipboard,
     "get_active_window": get_active_window,
@@ -102,6 +106,7 @@ TOOL_HANDLERS = {
     "read_file": read_file,
     "list_files": list_files,
     "read_pdf": read_pdf,
+    "open_file_in_notepad": open_file_in_notepad,
 
     # Launcher & Window tools
     "open_application": open_application,
@@ -141,6 +146,7 @@ TOOL_HANDLERS = {
     "stop_messaging": stop_messaging,
     "messaging_status": messaging_status,
     "add_messaging_contact": add_messaging_contact,
+    "confirm_whitelist_match": confirm_whitelist_match,
     "manage_whitelist": manage_whitelist,
     "send_message": send_message,
     "get_last_message": get_last_message,

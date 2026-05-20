@@ -27,6 +27,8 @@ _messaging_processes = {
 PENDING_MESSAGES_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_user_messages.json"
 CONTACT_ALIASES_FILE = Path(__file__).parent.parent.parent / "messaging" / "contact_aliases.json"
 PENDING_SEND_CONFIRMATIONS_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_send_confirmations.json"
+PENDING_WHITELIST_CONFIRMATIONS_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_whitelist_confirmations.json"
+
 
 
 def _init_json_file(path: Path, default_data: Dict):
@@ -110,6 +112,27 @@ def _pop_pending_confirmation(confirmation_id: str) -> Optional[Dict]:
     pending = data.get("pending", {})
     item = pending.pop(confirmation_id, None)
     _save_json_file(PENDING_SEND_CONFIRMATIONS_FILE, data)
+    return item
+
+
+def _load_pending_whitelist_confirmations() -> Dict:
+    return _load_json_file(PENDING_WHITELIST_CONFIRMATIONS_FILE, {"pending": {}})
+
+def _create_pending_whitelist(matches: list) -> str:
+    data = _load_pending_whitelist_confirmations()
+    confirmation_id = uuid.uuid4().hex
+    data.setdefault("pending", {})[confirmation_id] = {
+        "matches": matches,
+        "created_at": int(time.time())
+    }
+    _save_json_file(PENDING_WHITELIST_CONFIRMATIONS_FILE, data)
+    return confirmation_id
+
+def _pop_pending_whitelist(confirmation_id: str) -> Optional[Dict]:
+    data = _load_pending_whitelist_confirmations()
+    pending = data.get("pending", {})
+    item = pending.pop(confirmation_id, None)
+    _save_json_file(PENDING_WHITELIST_CONFIRMATIONS_FILE, data)
     return item
 
 
@@ -230,11 +253,20 @@ def _fetch_instagram_candidates() -> List[Dict]:
         from instagrapi import Client
         client = Client()
         session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
+        
         if session_file.exists():
-            client.load_settings(session_file)
-        client.login(username, password)
-        if session_file.exists() is False:
+            try:
+                client.load_settings(session_file)
+                client.login(username, password)
+                client.get_timeline_feed() # Validate session
+            except Exception:
+                client.set_settings({})
+                client.login(username, password)
+                client.dump_settings(session_file)
+        else:
+            client.login(username, password)
             client.dump_settings(session_file)
+            
         threads = client.direct_threads(amount=20)
         seen = set()
         candidates = []
@@ -790,84 +822,176 @@ def messaging_status():
         }
 
 
-def add_messaging_contact(platform, contact):
-    """
-    Add a contact to the messaging whitelist.
-
-    Args:
-        platform (str): "whatsapp" or "discord"
-        contact (str): Phone number or Discord user ID
-
-    Returns:
-        dict: Success status and message
-    """
+def _execute_add_messaging_contact(platform, actual_contact_id, resolved_name):
+    # Internal function to do the exact file add
     try:
-        # Try to add via HTTP API
         if platform == "whatsapp":
             endpoint = "http://localhost:5000/whitelist/whatsapp/add"
-            data = {"contact": contact}
+            data = {"contact": actual_contact_id}
         elif platform == "discord":
             endpoint = "http://localhost:5000/whitelist/discord/add_user"
-            data = {"user_id": contact}
+            data = {"user_id": actual_contact_id}
         elif platform == "instagram":
             endpoint = None
             data = None
         else:
-            return {
-                "success": False,
-                "error": "Invalid platform",
-                "message": "Platform must be 'whatsapp', 'discord', or 'instagram'"
-            }
+            return {"success": False, "message": "Invalid platform"}
 
-        # If HTTP server is running, use API
         if endpoint and _messaging_processes["http_server"]:
             try:
                 response = requests.post(endpoint, json=data, timeout=2)
                 if response.status_code == 200:
                     return {
                         "success": True,
-                        "message": f"Added {contact} to {platform} whitelist. They will now receive auto-replies.",
-                        "contact": contact,
+                        "message": f"Added {resolved_name} to {platform} whitelist. They will now receive auto-replies.",
+                        "contact": actual_contact_id,
                         "platform": platform
                     }
             except:
                 pass
 
-        # Otherwise, add directly to JSON file
-        import json
         whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
-
         with open(whitelist_file, 'r') as f:
             whitelist = json.load(f)
 
         if platform == "whatsapp":
-            if contact not in whitelist["whatsapp"]["contacts"]:
-                whitelist["whatsapp"]["contacts"].append(contact)
+            if actual_contact_id not in whitelist["whatsapp"]["contacts"]:
+                whitelist["whatsapp"]["contacts"].append(actual_contact_id)
         elif platform == "discord":
-            if contact not in whitelist["discord"]["users"]:
-                whitelist["discord"]["users"].append(contact)
+            if actual_contact_id not in whitelist["discord"]["users"]:
+                whitelist["discord"]["users"].append(actual_contact_id)
         elif platform == "instagram":
             if "instagram" not in whitelist:
                 whitelist["instagram"] = {"users": []}
-            if contact not in whitelist["instagram"]["users"]:
-                whitelist["instagram"]["users"].append(contact)
+            if actual_contact_id not in whitelist["instagram"]["users"]:
+                whitelist["instagram"]["users"].append(actual_contact_id)
 
         with open(whitelist_file, 'w') as f:
             json.dump(whitelist, f, indent=2)
 
         return {
             "success": True,
-            "message": f"Added {contact} to {platform} whitelist.",
-            "contact": contact,
+            "message": f"Added {resolved_name} to {platform} whitelist.",
+            "contact": actual_contact_id,
             "platform": platform
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "message": "Failed to add contact."}
+
+
+def add_messaging_contact(contact, platform=None):
+    """
+    Search and prepare to add a contact to the messaging whitelist.
+
+    Args:
+        contact (str): Phone number, user ID, or contact name
+        platform (str): Optional. "whatsapp", "discord", "instagram", or "all"
+
+    Returns:
+        dict: Success status and message/confirmation
+    """
+    try:
+        platforms_to_check = ["whatsapp", "discord", "instagram"]
+        
+        # If a specific platform is given
+        if platform and platform.lower() != "all":
+            plat = platform.lower()
+            if plat not in platforms_to_check:
+                return {"success": False, "message": "Platform must be 'whatsapp', 'discord', 'instagram' or 'all'"}
+            platforms_to_check = [plat]
+            
+        matches = []
+        messages = []
+        
+        for plat in platforms_to_check:
+            resolved = _resolve_contact_candidate(plat, contact)
+            if resolved:
+                matched_id = resolved["id"]
+                matched_name = resolved.get("display") or resolved.get("username") or matched_id
+                matches.append({
+                    "platform": plat,
+                    "target_id": matched_id,
+                    "target_display": matched_name
+                })
+                messages.append(f"A similar contact was found in {plat}: '{matched_name}'.")
+            else:
+                messages.append(f"No contact with that name found in {plat}.")
+
+        if not matches:
+            return {
+                "success": False,
+                "message": "\n".join(messages)
+            }
+
+        # If we got exactly 1 match and we checked only 1 platform, we can just ask confirmation or wait,
+        # the user wants "ask me if thats the correct one". So always ask!
+        confirmation_id = _create_pending_whitelist(matches)
+        
+        return {
+            "success": True,
+            "requires_confirmation": True,
+            "message": "\n".join(messages) + f"\n\nAsk the user: 'Should I continue adding them?' If they confirm what to add, use confirm_whitelist_match with confirmation_id '{confirmation_id}' and provide the approved platforms.",
+            "confirmation_id": confirmation_id,
+            "matches": matches
         }
 
     except Exception as e:
         return {
             "success": False,
             "error": str(e),
-            "message": "Failed to add contact."
+            "message": "Failed to search contact."
         }
+
+
+def confirm_whitelist_match(confirmation_id: str, approve: bool, platforms: list = None):
+    """
+    Confirm or cancel a pending whitelist add.
+
+    Args:
+        confirmation_id (str): The ID returned by add_messaging_contact
+        approve (bool): True to add, False to cancel
+        platforms (list, optional): List of platform names to actually add if multiple were found (e.g. ["discord", "instagram"]). Defaults to all matched platforms.
+        
+    Returns:
+        dict: Success status and message
+    """
+    pending = _pop_pending_whitelist(confirmation_id)
+    if not pending:
+        return {
+            "success": False,
+            "message": "That whitelist confirmation request was not found or has expired."
+        }
+
+    if not approve:
+        return {
+            "success": True,
+            "message": "Okay, cancelled. I did not add anyone to the whitelist."
+        }
+
+    matches = pending.get("matches", [])
+    added = []
+    failed = []
+    
+    for match in matches:
+        plat = match["platform"]
+        # Filter if the user selectively approved certain platforms
+        if platforms and plat not in platforms:
+            continue
+            
+        res = _execute_add_messaging_contact(plat, match["target_id"], match["target_display"])
+        if res.get("success"):
+            added.append(f"{match['target_display']} on {plat}")
+        else:
+            failed.append(f"{match['target_display']} on {plat} ({res.get('message', '')})")
+            
+    if not added:
+        return {"success": False, "message": "Failed to add any contacts.", "failed": failed}
+        
+    return {
+        "success": True,
+        "message": f"Successfully added {', '.join(added)} to whitelist.",
+        "failed": failed
+    }
 
 def get_last_message(platform, contact=None):
     """
@@ -1053,22 +1177,37 @@ def get_last_message(platform, contact=None):
             import os as _os
             ig_user = _os.getenv("INSTAGRAM_USERNAME", "")
             ig_pass = _os.getenv("INSTAGRAM_PASSWORD", "")
-            session_file = Path(__file__).parent.parent.parent / "messaging" / "instagram_session.json"
+            
+            # Using the main app directory session file instead of the messaging dir session file
+            session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
 
-            if ig_user and ig_pass and session_file.exists():
+            if ig_user and ig_pass:
                 try:
                     from instagrapi import Client
                     cl = Client()
-                    cl.load_settings(session_file)
-                    cl.login(ig_user, ig_pass)
-                    threads = cl.direct_threads(amount=5)
-                    best_msg = None
-                    best_ts = 0
+                    if session_file.exists():
+                        try:
+                            cl.load_settings(session_file)
+                            cl.login(ig_user, ig_pass)
+                            cl.get_timeline_feed() # Validate session
+                        except Exception as e:
+                            # Re-login if settings invalid/expired
+                            cl.set_settings({})
+                            cl.login(ig_user, ig_pass)
+                            cl.dump_settings(session_file)
+                    else:
+                        cl.login(ig_user, ig_pass)
+                        cl.dump_settings(session_file)
+
+                    threads = cl.direct_threads(amount=20)
+                    unread_msgs = []
                     me = str(cl.user_id)
 
                     for thread in threads:
                         for msg in thread.messages:
-                            if str(msg.user_id) == me or not msg.text:
+                            if str(msg.user_id) == me:
+                                break  # We sent a message, so older messages in this thread are considered read
+                            if not msg.text:
                                 continue
                             sender_name = None
                             for u in thread.users:
@@ -1079,20 +1218,24 @@ def get_last_message(platform, contact=None):
                             if contact and contact.lower() not in sender_name.lower():
                                 continue
                             ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
-                            if ts_unix > best_ts:
-                                best_ts = ts_unix
-                                best_msg = {
-                                    "contact": sender_name,
-                                    "body": msg.text,
-                                    "timestamp": _fmt_time(ts_unix),
-                                    "source": "live"
-                                }
+                            
+                            unread_msgs.append({
+                                "contact": sender_name,
+                                "body": msg.text,
+                                "timestamp": _fmt_time(ts_unix),
+                                "source": "live",
+                                "ts_unix": ts_unix
+                            })
 
-                    if best_msg:
+                    if unread_msgs:
+                        unread_msgs.sort(key=lambda x: x["ts_unix"], reverse=True)
+                        message_str = "Unread Instagram DMs:\n" + "\n".join(
+                            [f"- {m['contact']} at {m['timestamp']}: \"{m['body']}\"" for m in unread_msgs]
+                        )
                         return {
                             "success": True,
-                            **best_msg,
-                            "message": f"Latest Instagram DM from {best_msg['contact']} at {best_msg['timestamp']}: \"{best_msg['body']}\""
+                            "messages": unread_msgs,
+                            "message": message_str
                         }
                 except Exception as ig_err:
                     print(f"[get_last_message] Instagram live check failed: {ig_err}")
@@ -1121,73 +1264,195 @@ def get_last_message(platform, contact=None):
 
 def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
     """
-    Get new (unreported) messages across WhatsApp, Discord, and Instagram.
-    After reporting, messages are marked so ARIA won't repeat them unless
-    the user specifically asks about a person or date.
+    Get all new (unread) messages across ALL platforms at once via live checks.
+    Uses the same underlying platform logic as get_last_message but finds all unread messages
+    among the top 10 most recent chats/threads.
 
     Args:
         platform (str): "all", "discord", "whatsapp", or "instagram"
-        mark_as_read (bool): Mark returned messages as reported. Default True.
+        mark_as_read (bool): Kept for API compatibility, but does not apply to live checks.
 
     Returns:
         dict: Per-platform breakdown of new messages
     """
     try:
-        from src.messaging.history import MessagingHistory, PLATFORM_FILES
         import time as _time
+        import os as _os
+        import requests as _requests
 
-        history = MessagingHistory()
-        platforms_to_check = list(PLATFORM_FILES.keys()) if platform == "all" else [platform]
+        def _fmt_time(ts):
+            if not ts:
+                return "unknown time"
+            return _time.strftime("%Y-%m-%d %H:%M", _time.localtime(float(ts)))
 
+        platforms_to_check = ["whatsapp", "discord", "instagram"] if platform == "all" else [platform]
         results = {}
         total = 0
 
-        for plat in platforms_to_check:
-            unreported = history.get_unreported(plat)
-            if not unreported:
-                results[plat] = []
-                continue
+        # ── WhatsApp ──────────────────────────────────────────────────────────
+        if "whatsapp" in platforms_to_check:
+            wa_msgs = []
+            try:
+                health = _requests.get("http://localhost:3000/health", timeout=2)
+                if health.status_code == 200:
+                    resp = _requests.get("http://localhost:3000/unread", timeout=10)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("success"):
+                            for m in data.get("messages", []):
+                                ts = m.get("timestamp")
+                                ts_unix = float(ts) / 1000 if ts else 0
+                                wa_msgs.append({
+                                    "contact": m.get("contact", "Unknown"),
+                                    "message": m.get("body", ""),
+                                    "time": _fmt_time(ts_unix)
+                                })
+            except Exception as wa_err:
+                print(f"[get_all_new_messages] WhatsApp live check failed: {wa_err}")
+            
+            if wa_msgs:
+                results["whatsapp"] = wa_msgs
+                total += len(wa_msgs)
 
-            formatted = []
-            contact_ids = []
-            for entry in unreported:
-                ts = entry.get("last_interaction", 0)
-                time_str = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(ts)) if ts else "unknown time"
-                formatted.append({
-                    "contact": entry.get("name", entry.get("contact_id", "Unknown")),
-                    "message": entry.get("last_message", ""),
-                    "time": time_str
-                })
-                contact_ids.append(entry["contact_id"])
+        # ── Discord ───────────────────────────────────────────────────────────
+        if "discord" in platforms_to_check:
+            discord_msgs = []
+            token = _os.getenv("DISCORD_USER_TOKEN", "")
+            if token:
+                try:
+                    headers = {
+                        "authorization": token,
+                        "content-type": "application/json",
+                        "user-agent": "Mozilla/5.0"
+                    }
+                    me_resp = _requests.get("https://discord.com/api/v9/users/@me", headers=headers, timeout=3)
+                    my_id = me_resp.json().get("id", "") if me_resp.status_code == 200 else ""
 
-            results[plat] = formatted
-            total += len(formatted)
+                    # Get last 10 channels (DMs)
+                    channels_resp = _requests.get("https://discord.com/api/v9/users/@me/channels", headers=headers, timeout=5)
+                    if channels_resp.status_code == 200:
+                        channels = channels_resp.json()
+                        for ch in channels[:10]:
+                            if ch.get("type") != 1:  # Not a DM
+                                continue
+                            ch_id = ch.get("id")
+                            if not ch_id:
+                                continue
+                            
+                            # Get last 3 messages in channel to check for unread
+                            msgs_resp = _requests.get(f"https://discord.com/api/v9/channels/{ch_id}/messages?limit=3", headers=headers, timeout=5)
+                            if msgs_resp.status_code == 200:
+                                ch_msgs = msgs_resp.json()
+                                for m in ch_msgs:
+                                    if m.get("author", {}).get("id") == my_id:
+                                        break # We replied, stop looking for unread
+                                    if not m.get("content"):
+                                        continue
+                                        
+                                    # Found an unread message
+                                    import datetime
+                                    ts_str = m.get("timestamp", "")
+                                    try:
+                                        dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                                        ts_unix = dt.timestamp()
+                                    except Exception:
+                                        ts_unix = 0
+                                        
+                                    discord_msgs.append({
+                                        "contact": m.get("author", {}).get("global_name") or m.get("author", {}).get("username", "Unknown"),
+                                        "message": m.get("content", ""),
+                                        "time": _fmt_time(ts_unix),
+                                        "ts_unix": ts_unix
+                                    })
+                except Exception as discord_err:
+                    print(f"[get_all_new_messages] Discord live check failed: {discord_err}")
+            
+            if discord_msgs:
+                # Sort by time descending
+                discord_msgs.sort(key=lambda x: x.get("ts_unix", 0), reverse=True)
+                for m in discord_msgs:
+                    m.pop("ts_unix", None)
+                results["discord"] = discord_msgs
+                total += len(discord_msgs)
 
-            if mark_as_read:
-                history.mark_reported(plat, contact_ids)
+        # ── Instagram ─────────────────────────────────────────────────────────
+        if "instagram" in platforms_to_check:
+            ig_msgs = []
+            ig_user = _os.getenv("INSTAGRAM_USERNAME", "")
+            ig_pass = _os.getenv("INSTAGRAM_PASSWORD", "")
+            session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
+
+            if ig_user and ig_pass:
+                try:
+                    from instagrapi import Client
+                    cl = Client()
+                    if session_file.exists():
+                        try:
+                            cl.load_settings(session_file)
+                            cl.login(ig_user, ig_pass)
+                            cl.get_timeline_feed()
+                        except Exception:
+                            cl.set_settings({})
+                            cl.login(ig_user, ig_pass)
+                            cl.dump_settings(session_file)
+                    else:
+                        cl.login(ig_user, ig_pass)
+                        cl.dump_settings(session_file)
+
+                    threads = cl.direct_threads(amount=10)
+                    me = str(cl.user_id)
+
+                    for thread in threads:
+                        for msg in thread.messages:
+                            if str(msg.user_id) == me:
+                                break  # We sent a message, stop checking this thread
+                            if not msg.text:
+                                continue
+                                
+                            sender_name = None
+                            for u in thread.users:
+                                if str(u.pk) == str(msg.user_id):
+                                    sender_name = u.username
+                                    break
+                            sender_name = sender_name or str(msg.user_id)
+                            
+                            ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
+                            ig_msgs.append({
+                                "contact": sender_name,
+                                "message": msg.text,
+                                "time": _fmt_time(ts_unix),
+                                "ts_unix": ts_unix
+                            })
+                except Exception as ig_err:
+                    print(f"[get_all_new_messages] Instagram live check failed: {ig_err}")
+
+            if ig_msgs:
+                ig_msgs.sort(key=lambda x: x.get("ts_unix", 0), reverse=True)
+                for m in ig_msgs:
+                    m.pop("ts_unix", None)
+                results["instagram"] = ig_msgs
+                total += len(ig_msgs)
 
         if total == 0:
             return {
                 "success": True,
-                "message": "No new messages across any platform.",
+                "message": "No unread messages found across any platform.",
                 "results": {}
             }
 
         lines = []
         for plat, msgs in results.items():
             if not msgs:
-                lines.append(f"{plat.capitalize()}: No new messages.")
-            else:
-                lines.append(f"\n{plat.capitalize()} ({len(msgs)} new):")
-                for m in msgs:
-                    lines.append(f"  - {m['contact']} at {m['time']}: \"{m['message']}\"")
+                continue
+            lines.append(f"\n{plat.capitalize()} ({len(msgs)} unread):")
+            for m in msgs:
+                lines.append(f"  - From {m['contact']} at {m['time']}: \"{m['message']}\"")
 
         return {
             "success": True,
             "total_new": total,
             "message": "\n".join(lines).strip(),
-            "results": results,
-            "marked_as_read": mark_as_read
+            "results": results
         }
 
     except Exception as e:
@@ -1438,6 +1703,14 @@ def manage_whitelist(action, platform=None, contact=None):
                     "message": "Need both platform and contact to remove."
                 }
 
+            # Resolve contact to get the ID
+            resolved = _resolve_contact_candidate(platform, contact)
+            actual_contact_id = contact
+            resolved_name = contact
+            if resolved:
+                actual_contact_id = resolved["id"]
+                resolved_name = resolved.get("display") or resolved.get("username") or actual_contact_id
+
             # Remove contact
             removed = False
 
@@ -1445,15 +1718,24 @@ def manage_whitelist(action, platform=None, contact=None):
             whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
 
             if platform == "whatsapp":
-                if contact in whitelist["whatsapp"]["contacts"]:
+                if actual_contact_id in whitelist["whatsapp"]["contacts"]:
+                    whitelist["whatsapp"]["contacts"].remove(actual_contact_id)
+                    removed = True
+                elif contact in whitelist["whatsapp"]["contacts"]:
                     whitelist["whatsapp"]["contacts"].remove(contact)
                     removed = True
             elif platform == "discord":
-                if contact in whitelist.get("discord", {}).get("users", []):
+                if actual_contact_id in whitelist.get("discord", {}).get("users", []):
+                    whitelist["discord"]["users"].remove(actual_contact_id)
+                    removed = True
+                elif contact in whitelist.get("discord", {}).get("users", []):
                     whitelist["discord"]["users"].remove(contact)
                     removed = True
             elif platform == "instagram":
-                if contact in whitelist.get("instagram", {}).get("users", []):
+                if actual_contact_id in whitelist.get("instagram", {}).get("users", []):
+                    whitelist["instagram"]["users"].remove(actual_contact_id)
+                    removed = True
+                elif contact in whitelist.get("instagram", {}).get("users", []):
                     whitelist["instagram"]["users"].remove(contact)
                     removed = True
 
@@ -1466,10 +1748,11 @@ def manage_whitelist(action, platform=None, contact=None):
                     # (No remove endpoint in current API, file update is enough)
                     pass
 
+                name_display = resolved_name if resolved_name != actual_contact_id else contact
                 return {
                     "success": True,
-                    "message": f"Removed {contact} from {platform} whitelist.",
-                    "contact": contact,
+                    "message": f"Removed {name_display} from {platform} whitelist.",
+                    "contact": actual_contact_id,
                     "platform": platform
                 }
             else:

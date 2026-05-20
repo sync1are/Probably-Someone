@@ -102,6 +102,15 @@ class MessagingController:
         """
         self.stats["discord_messages_received"] += 1
 
+        # Record interaction for autonomous mode (records for EVERYONE)
+        self.history_manager.record_interaction(
+            platform="discord",
+            contact_id=user_id,
+            contact_name=user_name,
+            message=message_content,
+            reply=None
+        )
+
         # Check whitelist
         if not self.reply_to_anyone:
             is_dm = channel_id is None
@@ -170,6 +179,15 @@ class MessagingController:
         """
         self.stats["whatsapp_messages_received"] += 1
 
+        # Record interaction for autonomous mode (records for EVERYONE)
+        self.history_manager.record_interaction(
+            platform="whatsapp",
+            contact_id=contact_id,
+            contact_name=contact_name,
+            message=message_content,
+            reply=None
+        )
+
         # Check whitelist (by name or ID)
         if not self.reply_to_anyone:
             if not (self.whitelist_manager.is_whatsapp_contact_allowed(contact_id) or
@@ -232,6 +250,15 @@ class MessagingController:
             AI-generated reply or None if not whitelisted
         """
         self.stats["instagram_messages_received"] += 1
+
+        # Record interaction for autonomous mode (records for EVERYONE)
+        self.history_manager.record_interaction(
+            platform="instagram",
+            contact_id=user_id,
+            contact_name=user_name,
+            message=message_content,
+            reply=None
+        )
 
         # Check whitelist
         if not self.reply_to_anyone:
