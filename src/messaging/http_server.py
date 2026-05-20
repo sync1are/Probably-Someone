@@ -144,11 +144,58 @@ def add_discord_user():
     })
 
 
+from werkzeug.serving import make_server
+import threading
+
+server_instance = None
+server_lock = threading.Lock()
+
+def start_server_in_thread(host='0.0.0.0', port=5000):
+    """Start the Flask server in a daemon thread using make_server."""
+    global server_instance
+    with server_lock:
+        if server_instance is not None:
+            print("[HTTP Server] Already running.")
+            return True
+        
+        # Check if the port is already bound
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind((host, port))
+            s.close()
+        except OSError:
+            print(f"[HTTP Server] Port {port} is already bound. Cannot start server.")
+            return False
+
+        server_instance = make_server(host, port, app)
+        thread = threading.Thread(target=server_instance.serve_forever, daemon=True)
+        thread.start()
+        print(f"[HTTP Server] Started on http://{host}:{port}")
+        return True
+
+def stop_server():
+    """Shut down the Flask server instance."""
+    global server_instance
+    with server_lock:
+        if server_instance is not None:
+            print("[HTTP Server] Shutting down...")
+            server_instance.shutdown()
+            server_instance = None
+            print("[HTTP Server] Shutdown complete.")
+            return True
+        return False
+
 def run_server(host='0.0.0.0', port=5000):
-    """Run the Flask server."""
-    print(f"[HTTP Server] Starting on {host}:{port}")
-    print(f"[HTTP Server] WhatsApp bridge should connect to http://localhost:{port}")
-    app.run(host=host, port=port, debug=False)
+    """Run the Flask server synchronously (compatibility wrapper)."""
+    if start_server_in_thread(host, port):
+        # Block main thread since run_server is expected to block
+        import time
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            stop_server()
 
 
 if __name__ == '__main__':

@@ -16,6 +16,9 @@ from typing import Dict, List, Optional
 
 import json
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+MESSAGING_DIR = PROJECT_ROOT / "messaging"
+
 # Global state for running processes
 _messaging_processes = {
     "whatsapp_bridge": None,
@@ -24,10 +27,62 @@ _messaging_processes = {
     "http_server": None
 }
 
-PENDING_MESSAGES_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_user_messages.json"
-CONTACT_ALIASES_FILE = Path(__file__).parent.parent.parent / "messaging" / "contact_aliases.json"
-PENDING_SEND_CONFIRMATIONS_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_send_confirmations.json"
-PENDING_WHITELIST_CONFIRMATIONS_FILE = Path(__file__).parent.parent.parent / "messaging" / "pending_whitelist_confirmations.json"
+_background_tasks = set()
+
+_instagram_client_cache = None
+_instagram_client_lock = threading.Lock()
+
+def _get_instagram_client():
+    """Return a cached, authenticated instagrapi Client. Logs in once per session."""
+    global _instagram_client_cache
+    with _instagram_client_lock:
+        if _instagram_client_cache is not None:
+            return _instagram_client_cache
+        username = os.getenv("INSTAGRAM_USERNAME", "").strip()
+        password = os.getenv("INSTAGRAM_PASSWORD", "").strip()
+        if not username or not password:
+            raise ValueError("Instagram credentials not configured.")
+        from instagrapi import Client
+        cl = Client()
+        session_file = PROJECT_ROOT / "instagram_session.json"
+        if session_file.exists():
+            try:
+                cl.load_settings(session_file)
+                cl.login(username, password)
+                cl.get_timeline_feed() # Validate session
+            except Exception:
+                try:
+                    cl.set_settings({})
+                    cl.login(username, password)
+                    cl.dump_settings(session_file)
+                except Exception as login_err:
+                    raise Exception(f"Failed to login to Instagram after clearing settings: {login_err}")
+        else:
+            try:
+                cl.login(username, password)
+                cl.dump_settings(session_file)
+            except Exception as login_err:
+                raise Exception(f"Failed to login to Instagram: {login_err}")
+        _instagram_client_cache = cl
+        return cl
+
+def _invalidate_instagram_client():
+    global _instagram_client_cache
+    with _instagram_client_lock:
+        _instagram_client_cache = None
+
+def _fmt_time(ts) -> str:
+    """Format a Unix timestamp into a human-readable date-time string."""
+    if not ts:
+        return "unknown time"
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(float(ts)))
+
+
+
+PENDING_MESSAGES_FILE = MESSAGING_DIR / "pending_user_messages.json"
+CONTACT_ALIASES_FILE = MESSAGING_DIR / "contact_aliases.json"
+PENDING_SEND_CONFIRMATIONS_FILE = MESSAGING_DIR / "pending_send_confirmations.json"
+PENDING_WHITELIST_CONFIRMATIONS_FILE = MESSAGING_DIR / "pending_whitelist_confirmations.json"
 
 
 
@@ -245,27 +300,12 @@ def _fetch_discord_candidates() -> List[Dict]:
 
 
 def _fetch_instagram_candidates() -> List[Dict]:
-    username = os.getenv("INSTAGRAM_USERNAME", "").strip()
-    password = os.getenv("INSTAGRAM_PASSWORD", "").strip()
-    if not username or not password:
-        return []
     try:
-        from instagrapi import Client
-        client = Client()
-        session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
-        
-        if session_file.exists():
-            try:
-                client.load_settings(session_file)
-                client.login(username, password)
-                client.get_timeline_feed() # Validate session
-            except Exception:
-                client.set_settings({})
-                client.login(username, password)
-                client.dump_settings(session_file)
-        else:
-            client.login(username, password)
-            client.dump_settings(session_file)
+        try:
+            client = _get_instagram_client()
+        except Exception as auth_err:
+            print(f"[Instagram] Auth failed: {auth_err}")
+            return []
             
         threads = client.direct_threads(amount=20)
         seen = set()
@@ -284,7 +324,9 @@ def _fetch_instagram_candidates() -> List[Dict]:
                     "username": handle or ""
                 })
         return candidates
-    except Exception:
+    except Exception as e:
+        print(f"[Instagram] Failed to fetch candidates: {e}")
+        _invalidate_instagram_client()
         return []
 
 
@@ -348,22 +390,12 @@ def _send_discord_message(target_user_id: str, message: str) -> Dict:
 
 
 def _send_instagram_message(target_user_id: str, message: str) -> Dict:
-    username = os.getenv("INSTAGRAM_USERNAME", "").strip()
-    password = os.getenv("INSTAGRAM_PASSWORD", "").strip()
-    if not username or not password:
-        return {"success": False, "message": "Instagram credentials are not configured."}
     try:
-        from instagrapi import Client
-        client = Client()
-        session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
-        if session_file.exists():
-            client.load_settings(session_file)
-        client.login(username, password)
-        if session_file.exists() is False:
-            client.dump_settings(session_file)
+        client = _get_instagram_client()
         client.direct_send(message, user_ids=[int(target_user_id)])
         return {"success": True}
     except Exception as e:
+        _invalidate_instagram_client()
         return {"success": False, "message": f"Failed to send Instagram DM: {str(e)}"}
 
 
@@ -388,14 +420,6 @@ def _send_message_to_target(platform: str, target_id: str, target_display: str, 
         "contact": target_display
     }
 
-def _init_pending_messages():
-    """Initialize the pending messages file if it doesn't exist."""
-    if not PENDING_MESSAGES_FILE.parent.exists():
-        PENDING_MESSAGES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not PENDING_MESSAGES_FILE.exists():
-        with open(PENDING_MESSAGES_FILE, 'w') as f:
-            json.dump({"pending_count": 0, "messages": []}, f, indent=2)
-
 def store_user_message(contact_name: str, platform: str, message_content: str):
     """
     Store a message for the user.
@@ -409,9 +433,7 @@ def store_user_message(contact_name: str, platform: str, message_content: str):
         dict: Success status and confirmation
     """
     try:
-        _init_pending_messages()
-        with open(PENDING_MESSAGES_FILE, 'r') as f:
-            data = json.load(f)
+        data = _load_json_file(PENDING_MESSAGES_FILE, {"pending_count": 0, "messages": []})
 
         new_message = {
             "platform": platform,
@@ -448,9 +470,7 @@ def get_pending_messages(clear: bool = True):
         dict: Success status and list of messages
     """
     try:
-        _init_pending_messages()
-        with open(PENDING_MESSAGES_FILE, 'r') as f:
-            data = json.load(f)
+        data = _load_json_file(PENDING_MESSAGES_FILE, {"pending_count": 0, "messages": []})
 
         messages = data.get("messages", [])
         count = data.get("pending_count", 0)
@@ -503,7 +523,7 @@ def setup_whatsapp():
             }
 
         # Check if dependencies are installed
-        bridge_dir = Path(__file__).parent.parent.parent / "messaging" / "whatsapp_bridge"
+        bridge_dir = MESSAGING_DIR / "whatsapp_bridge"
         node_modules = bridge_dir / "node_modules"
 
         if not node_modules.exists():
@@ -753,8 +773,8 @@ def stop_messaging():
 
         # Stop HTTP server
         if _messaging_processes["http_server"]:
-            # HTTP server is in a thread, we'll just set it to None
-            # The thread will be daemon and die when app exits
+            from src.messaging.http_server import stop_server
+            stop_server()
             _messaging_processes["http_server"] = None
             stopped.append("HTTP server")
 
@@ -850,7 +870,7 @@ def _execute_add_messaging_contact(platform, actual_contact_id, resolved_name):
             except:
                 pass
 
-        whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
+        whitelist_file = MESSAGING_DIR / "messaging_whitelist.json"
         with open(whitelist_file, 'r') as f:
             whitelist = json.load(f)
 
@@ -1005,20 +1025,13 @@ def get_last_message(platform, contact=None):
     Returns:
         dict: Success status with message details
     """
-    import time as _time
-
-    def _fmt_time(ts):
-        if not ts:
-            return "unknown time"
-        return _time.strftime("%Y-%m-%d %H:%M", _time.localtime(float(ts)))
-
     def _history_lookup(plat, contact_filter=None):
         """Read last message from the per-platform history file."""
         from src.messaging.history import PLATFORM_FILES
         import json as _j
         history_file = PLATFORM_FILES.get(plat)
         if not history_file or not history_file.exists():
-            legacy = Path(__file__).parent.parent.parent / "messaging" / "messaging_history.json"
+            legacy = MESSAGING_DIR / "messaging_history.json"
             if legacy.exists():
                 try:
                     data = _j.loads(legacy.read_text(encoding="utf-8"))
@@ -1174,71 +1187,49 @@ def get_last_message(platform, contact=None):
 
         # ── Instagram ─────────────────────────────────────────────────────────
         elif platform == "instagram":
-            import os as _os
-            ig_user = _os.getenv("INSTAGRAM_USERNAME", "")
-            ig_pass = _os.getenv("INSTAGRAM_PASSWORD", "")
-            
-            # Using the main app directory session file instead of the messaging dir session file
-            session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
+            try:
+                cl = _get_instagram_client()
+                threads = cl.direct_threads(amount=20)
+                unread_msgs = []
+                me = str(cl.user_id)
 
-            if ig_user and ig_pass:
-                try:
-                    from instagrapi import Client
-                    cl = Client()
-                    if session_file.exists():
-                        try:
-                            cl.load_settings(session_file)
-                            cl.login(ig_user, ig_pass)
-                            cl.get_timeline_feed() # Validate session
-                        except Exception as e:
-                            # Re-login if settings invalid/expired
-                            cl.set_settings({})
-                            cl.login(ig_user, ig_pass)
-                            cl.dump_settings(session_file)
-                    else:
-                        cl.login(ig_user, ig_pass)
-                        cl.dump_settings(session_file)
+                for thread in threads:
+                    for msg in thread.messages:
+                        if str(msg.user_id) == me:
+                            break  # We sent a message, so older messages in this thread are considered read
+                        if not msg.text:
+                            continue
+                        sender_name = None
+                        for u in thread.users:
+                            if str(u.pk) == str(msg.pk if hasattr(msg, "pk") else msg.user_id):
+                                sender_name = u.username
+                                break
+                        sender_name = sender_name or str(msg.user_id)
+                        if contact and contact.lower() not in sender_name.lower():
+                            continue
+                        ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
+                        
+                        unread_msgs.append({
+                            "contact": sender_name,
+                            "body": msg.text,
+                            "timestamp": _fmt_time(ts_unix),
+                            "source": "live",
+                            "ts_unix": ts_unix
+                        })
 
-                    threads = cl.direct_threads(amount=20)
-                    unread_msgs = []
-                    me = str(cl.user_id)
-
-                    for thread in threads:
-                        for msg in thread.messages:
-                            if str(msg.user_id) == me:
-                                break  # We sent a message, so older messages in this thread are considered read
-                            if not msg.text:
-                                continue
-                            sender_name = None
-                            for u in thread.users:
-                                if str(u.pk) == str(msg.user_id):
-                                    sender_name = u.username
-                                    break
-                            sender_name = sender_name or str(msg.user_id)
-                            if contact and contact.lower() not in sender_name.lower():
-                                continue
-                            ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
-                            
-                            unread_msgs.append({
-                                "contact": sender_name,
-                                "body": msg.text,
-                                "timestamp": _fmt_time(ts_unix),
-                                "source": "live",
-                                "ts_unix": ts_unix
-                            })
-
-                    if unread_msgs:
-                        unread_msgs.sort(key=lambda x: x["ts_unix"], reverse=True)
-                        message_str = "Unread Instagram DMs:\n" + "\n".join(
-                            [f"- {m['contact']} at {m['timestamp']}: \"{m['body']}\"" for m in unread_msgs]
-                        )
-                        return {
-                            "success": True,
-                            "messages": unread_msgs,
-                            "message": message_str
-                        }
-                except Exception as ig_err:
-                    print(f"[get_last_message] Instagram live check failed: {ig_err}")
+                if unread_msgs:
+                    unread_msgs.sort(key=lambda x: x["ts_unix"], reverse=True)
+                    message_str = "Unread Instagram DMs:\n" + "\n".join(
+                        [f"- {m['contact']} at {m['timestamp']}: \"{m['body']}\"" for m in unread_msgs]
+                    )
+                    return {
+                        "success": True,
+                        "messages": unread_msgs,
+                        "message": message_str
+                    }
+            except Exception as ig_err:
+                print(f"[get_last_message] Instagram live check failed: {ig_err}")
+                _invalidate_instagram_client()
 
             result = _history_lookup("instagram", contact)
             if result:
@@ -1276,15 +1267,6 @@ def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
         dict: Per-platform breakdown of new messages
     """
     try:
-        import time as _time
-        import os as _os
-        import requests as _requests
-
-        def _fmt_time(ts):
-            if not ts:
-                return "unknown time"
-            return _time.strftime("%Y-%m-%d %H:%M", _time.localtime(float(ts)))
-
         platforms_to_check = ["whatsapp", "discord", "instagram"] if platform == "all" else [platform]
         results = {}
         total = 0
@@ -1293,9 +1275,9 @@ def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
         if "whatsapp" in platforms_to_check:
             wa_msgs = []
             try:
-                health = _requests.get("http://localhost:3000/health", timeout=2)
+                health = requests.get("http://localhost:3000/health", timeout=2)
                 if health.status_code == 200:
-                    resp = _requests.get("http://localhost:3000/unread", timeout=10)
+                    resp = requests.get("http://localhost:3000/unread", timeout=10)
                     if resp.status_code == 200:
                         data = resp.json()
                         if data.get("success"):
@@ -1317,7 +1299,7 @@ def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
         # ── Discord ───────────────────────────────────────────────────────────
         if "discord" in platforms_to_check:
             discord_msgs = []
-            token = _os.getenv("DISCORD_USER_TOKEN", "")
+            token = os.getenv("DISCORD_USER_TOKEN", "")
             if token:
                 try:
                     headers = {
@@ -1325,11 +1307,11 @@ def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
                         "content-type": "application/json",
                         "user-agent": "Mozilla/5.0"
                     }
-                    me_resp = _requests.get("https://discord.com/api/v9/users/@me", headers=headers, timeout=3)
+                    me_resp = requests.get("https://discord.com/api/v9/users/@me", headers=headers, timeout=3)
                     my_id = me_resp.json().get("id", "") if me_resp.status_code == 200 else ""
 
                     # Get last 10 channels (DMs)
-                    channels_resp = _requests.get("https://discord.com/api/v9/users/@me/channels", headers=headers, timeout=5)
+                    channels_resp = requests.get("https://discord.com/api/v9/users/@me/channels", headers=headers, timeout=5)
                     if channels_resp.status_code == 200:
                         channels = channels_resp.json()
                         for ch in channels[:10]:
@@ -1340,7 +1322,7 @@ def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
                                 continue
                             
                             # Get last 3 messages in channel to check for unread
-                            msgs_resp = _requests.get(f"https://discord.com/api/v9/channels/{ch_id}/messages?limit=3", headers=headers, timeout=5)
+                            msgs_resp = requests.get(f"https://discord.com/api/v9/channels/{ch_id}/messages?limit=3", headers=headers, timeout=5)
                             if msgs_resp.status_code == 200:
                                 ch_msgs = msgs_resp.json()
                                 for m in ch_msgs:
@@ -1378,53 +1360,35 @@ def get_all_new_messages(platform: str = "all", mark_as_read: bool = True):
         # ── Instagram ─────────────────────────────────────────────────────────
         if "instagram" in platforms_to_check:
             ig_msgs = []
-            ig_user = _os.getenv("INSTAGRAM_USERNAME", "")
-            ig_pass = _os.getenv("INSTAGRAM_PASSWORD", "")
-            session_file = Path(__file__).parent.parent.parent / "instagram_session.json"
+            try:
+                cl = _get_instagram_client()
+                threads = cl.direct_threads(amount=10)
+                me = str(cl.user_id)
 
-            if ig_user and ig_pass:
-                try:
-                    from instagrapi import Client
-                    cl = Client()
-                    if session_file.exists():
-                        try:
-                            cl.load_settings(session_file)
-                            cl.login(ig_user, ig_pass)
-                            cl.get_timeline_feed()
-                        except Exception:
-                            cl.set_settings({})
-                            cl.login(ig_user, ig_pass)
-                            cl.dump_settings(session_file)
-                    else:
-                        cl.login(ig_user, ig_pass)
-                        cl.dump_settings(session_file)
-
-                    threads = cl.direct_threads(amount=10)
-                    me = str(cl.user_id)
-
-                    for thread in threads:
-                        for msg in thread.messages:
-                            if str(msg.user_id) == me:
-                                break  # We sent a message, stop checking this thread
-                            if not msg.text:
-                                continue
-                                
-                            sender_name = None
-                            for u in thread.users:
-                                if str(u.pk) == str(msg.user_id):
-                                    sender_name = u.username
-                                    break
-                            sender_name = sender_name or str(msg.user_id)
+                for thread in threads:
+                    for msg in thread.messages:
+                        if str(msg.user_id) == me:
+                            break  # We sent a message, stop checking this thread
+                        if not msg.text:
+                            continue
                             
-                            ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
-                            ig_msgs.append({
-                                "contact": sender_name,
-                                "message": msg.text,
-                                "time": _fmt_time(ts_unix),
-                                "ts_unix": ts_unix
-                            })
-                except Exception as ig_err:
-                    print(f"[get_all_new_messages] Instagram live check failed: {ig_err}")
+                        sender_name = None
+                        for u in thread.users:
+                            if str(u.pk) == str(msg.pk if hasattr(msg, "pk") else msg.user_id):
+                                sender_name = u.username
+                                break
+                        sender_name = sender_name or str(msg.user_id)
+                        
+                        ts_unix = msg.timestamp.timestamp() if hasattr(msg.timestamp, "timestamp") else 0
+                        ig_msgs.append({
+                            "contact": sender_name,
+                            "message": msg.text,
+                            "time": _fmt_time(ts_unix),
+                            "ts_unix": ts_unix
+                        })
+            except Exception as ig_err:
+                print(f"[get_all_new_messages] Instagram live check failed: {ig_err}")
+                _invalidate_instagram_client()
 
             if ig_msgs:
                 ig_msgs.sort(key=lambda x: x.get("ts_unix", 0), reverse=True)
@@ -1631,7 +1595,7 @@ def manage_whitelist(action, platform=None, contact=None):
     """
     try:
         import json
-        whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
+        whitelist_file = MESSAGING_DIR / "messaging_whitelist.json"
 
         # Initialize default if it doesn't exist
         if not whitelist_file.exists():
@@ -1694,7 +1658,7 @@ def manage_whitelist(action, platform=None, contact=None):
                     "message": "Need both platform and contact to add. Example: 'Add John to WhatsApp'"
                 }
 
-            return add_messaging_contact(platform, contact)
+            return add_messaging_contact(contact, platform)
 
         elif action == "remove":
             if not platform or not contact:
@@ -1715,7 +1679,7 @@ def manage_whitelist(action, platform=None, contact=None):
             removed = False
 
             # Using updated path
-            whitelist_file = Path(__file__).parent.parent.parent / "messaging" / "messaging_whitelist.json"
+            whitelist_file = MESSAGING_DIR / "messaging_whitelist.json"
 
             if platform == "whatsapp":
                 if actual_contact_id in whitelist["whatsapp"]["contacts"]:
@@ -1812,14 +1776,11 @@ def manage_whitelist(action, platform=None, contact=None):
 
 def _start_http_server():
     """Start HTTP server in background thread."""
-    def run_server():
-        from src.messaging.http_server import run_server
-        run_server(host='0.0.0.0', port=5000)
-
-    thread = threading.Thread(target=run_server, daemon=True)
-    thread.start()
-    _messaging_processes["http_server"] = thread
-    return True
+    from src.messaging.http_server import start_server_in_thread
+    success = start_server_in_thread(host='0.0.0.0', port=5000)
+    if success:
+        _messaging_processes["http_server"] = True
+    return success
 
 
 def _start_whatsapp_bridge():
@@ -1835,7 +1796,7 @@ def _start_whatsapp_bridge():
         except requests.exceptions.RequestException:
             pass  # Not running, proceed with startup
 
-        bridge_dir = Path(__file__).parent.parent.parent / "messaging" / "whatsapp_bridge"
+        bridge_dir = MESSAGING_DIR / "whatsapp_bridge"
 
         # Start in a new terminal window so QR code displays properly
         if os.name == 'nt':  # Windows
@@ -1861,7 +1822,7 @@ def _start_discord_bot():
     """Start Discord bot process."""
     try:
         import sys
-        bot_file = Path(__file__).parent.parent.parent / "messaging" / "discord_bot.py"
+        bot_file = MESSAGING_DIR / "discord_bot.py"
         # Run using the same python executable that the main app is using
         process = subprocess.Popen(
             [sys.executable, str(bot_file)],
@@ -1888,7 +1849,7 @@ def _start_instagram_bot():
     """Start Instagram bot process."""
     try:
         import sys
-        bot_file = Path(__file__).parent.parent.parent / "messaging" / "instagram_bot.py"
+        bot_file = MESSAGING_DIR / "instagram_bot.py"
         process = subprocess.Popen(
             [sys.executable, str(bot_file)],
             stdout=subprocess.PIPE,
@@ -1995,7 +1956,8 @@ def send_proactive_message(platform: str, contact_id: str, context: str):
                     context=context
                 )
             )
-            # We don't wait for it, just let it run
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
         except RuntimeError:
             # No running event loop
             asyncio.run(

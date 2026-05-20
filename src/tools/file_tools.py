@@ -16,19 +16,32 @@ from .file_finder import find_file
 USER_DOCS = Path(os.path.expanduser("~")) / "Documents" / "ARIA_Files"
 
 
+# Module-level injectable permission hook (set by app.py at startup if running headless)
+_headless_permission_callback = None
+
+def set_headless_permission_callback(fn):
+    """Register a callback(action, filepath) -> bool for headless permission checks."""
+    global _headless_permission_callback
+    _headless_permission_callback = fn
+
+
 def _ask_permission(action: str, filepath: str) -> bool:
     """Prompt the user for permission in the console to read/write a file.
 
-    Skips prompt and auto-grants if there's no TTY (e.g. running headlessly via Discord).
+    Falls back to a registered callback in non-TTY mode, or denies the request if none.
     """
-    # Auto-grant when no interactive terminal is available
     try:
         is_tty = os.isatty(sys.stdin.fileno())
     except (AttributeError, OSError):
         is_tty = False
+
     if not is_tty:
-        print(f"[ARIA] Auto-granting {action} permission for: {filepath}")
-        return True
+        if _headless_permission_callback:
+            return _headless_permission_callback(action, filepath)
+        # Default: Deny in headless mode if no registered callback
+        print(f"[ARIA] Denied {action} permission for {filepath} (headless, no callback registered)")
+        return False
+
     print(f"\n⚠️  ARIA is requesting permission to {action} the following file:")
     print(f"   {filepath}")
     while True:
@@ -121,8 +134,19 @@ def write_file(filename: str, content: str, as_json: bool = False) -> Dict[str, 
         filepath = _resolve_path(filename, create_new=True)
         
         # Programmatic safety check for core codebase
-        protected_patterns = ['app.py', 'src/']
-        is_protected = any(p in str(filepath).replace('\\', '/') for p in protected_patterns)
+        try:
+            resolved_file = filepath.resolve()
+            project_dir = Path.cwd().resolve()
+            src_dir = (project_dir / "src").resolve()
+            app_py = (project_dir / "app.py").resolve()
+            is_protected = (
+                resolved_file == app_py or 
+                resolved_file == src_dir or 
+                resolved_file.is_relative_to(src_dir)
+            )
+        except Exception:
+            protected_patterns = ['app.py', 'src/']
+            is_protected = any(p in str(filepath).replace('\\', '/') for p in protected_patterns)
         
         if is_protected:
             print(f"\n🛑 CRITICAL SAFETY WARNING: ARIA is attempting to modify a CORE file:")
@@ -190,8 +214,19 @@ def append_to_file(filename: str, content: str) -> Dict[str, Any]:
         filepath = _resolve_path(filename)
         
         # Programmatic safety check for core codebase
-        protected_patterns = ['app.py', 'src/']
-        is_protected = any(p in str(filepath).replace('\\', '/') for p in protected_patterns)
+        try:
+            resolved_file = filepath.resolve()
+            project_dir = Path.cwd().resolve()
+            src_dir = (project_dir / "src").resolve()
+            app_py = (project_dir / "app.py").resolve()
+            is_protected = (
+                resolved_file == app_py or 
+                resolved_file == src_dir or 
+                resolved_file.is_relative_to(src_dir)
+            )
+        except Exception:
+            protected_patterns = ['app.py', 'src/']
+            is_protected = any(p in str(filepath).replace('\\', '/') for p in protected_patterns)
         
         if is_protected:
             print(f"\n🛑 CRITICAL SAFETY WARNING: ARIA is attempting to modify a CORE file:")

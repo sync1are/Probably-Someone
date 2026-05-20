@@ -43,6 +43,10 @@ class Agent:
             'get_important_unread_emails', 'read_specific_email'
         ]
         
+        # Verify no overlap between direct and LLM-routed tools
+        overlap = set(self.direct_response_tools) & set(self.llm_response_tools)
+        assert not overlap, f"Conflict: tools {overlap} are defined in both direct and LLM-response tool lists."
+        
         # Tools that require explicit user permission
         self.sensitive_tools = [
             'read_file', 'write_file', 'append_to_file', 'run_terminal_command',

@@ -466,7 +466,8 @@ class ARIATestSuite:
         # Test tool execution
         def test_execution():
             # Test a safe tool (clipboard get)
-            result = execute_tool('get_clipboard', {})
+            import asyncio
+            result = asyncio.run(execute_tool('get_clipboard', {}))
             return {
                 'success': isinstance(result, dict),
                 'has_success_field': 'success' in result if isinstance(result, dict) else False

@@ -24,7 +24,7 @@ type = "function"
 
 [tools.function]
 name = "search_web"
-description = "Search the web by opening the default browser. Use when the user asks to search for something, look something up, or see images of something."
+description = "Search the web by launching the default browser on the host machine to search Google directly. Use ONLY for simple, quick user-facing searches where the user wants to see the search results open in their browser on their screen. For automated scraping, background task completion, navigation, page interactions, or multi-step tasks, use browser_use_task instead."
 [tools.function.parameters]
 type = "object"
 required = [ "query",]
@@ -41,7 +41,7 @@ type = "function"
 
 [tools.function]
 name = "set_system_volume"
-description = "Sets the system audio master volume. Use when user asks 'set volume to 50%', 'volume max', etc."
+description = "Sets the host machine's system audio master volume. Use when user asks 'set volume to 50%', 'volume max', etc. Do NOT use this tool for Spotify-specific playback volume adjustments (use spotify_volume for that)."
 [tools.function.parameters]
 type = "object"
 required = [ "level",]
@@ -443,7 +443,7 @@ type = "function"
 
 [tools.function]
 name = "spotify_volume"
-description = "Set volume level."
+description = "Sets the Spotify playback volume. Use ONLY when Spotify is active and the user explicitly requests to change Spotify's volume specifically (e.g., 'turn down Spotify')."
 [tools.function.parameters]
 type = "object"
 required = [ "volume_percent",]
@@ -745,10 +745,6 @@ required = [ "command",]
 [tools.function.parameters.properties.command]
 type = "string"
 description = "The PowerShell command to execute"
-
-
-
-
 
 [[tools]]
 type = "function"

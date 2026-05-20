@@ -7,7 +7,8 @@ from src.tools.system_tools import (
     scrape_browser_images,
     get_clipboard,
     set_clipboard,
-    get_active_window
+    get_active_window,
+    run_terminal_command
 )
 from src.tools.web_tools import scrape_webpage, search_web
 from src.tools.browser_use_tools import browser_use_task, start_edge_with_debugging
@@ -92,6 +93,7 @@ TOOL_HANDLERS = {
     "get_clipboard": get_clipboard,
     "set_clipboard": set_clipboard,
     "get_active_window": get_active_window,
+    "run_terminal_command": run_terminal_command,
 
     # Web/News tools
     "scrape_webpage": scrape_webpage,

@@ -99,14 +99,21 @@ class MessagingHistory:
         if platform not in self.history:
             self.history[platform] = self._load(platform)
 
-        self.history[platform][contact_id] = {
-            "name": contact_name,
-            "last_interaction": time.time(),
-            "last_message": message,
-            "last_reply": reply,
-            "reported": False,  # will be set True after ARIA tells the user
-            "interaction_count": self.history[platform].get(contact_id, {}).get("interaction_count", 0) + 1
-        }
+        existing = self.history[platform].get(contact_id, {})
+        # Avoid double-logging / double-incrementing if we are just adding a reply to the same message
+        if existing and existing.get("last_message") == message and existing.get("last_reply") is None and reply is not None:
+            existing["last_reply"] = reply
+            existing["last_interaction"] = time.time()
+            self.history[platform][contact_id] = existing
+        else:
+            self.history[platform][contact_id] = {
+                "name": contact_name,
+                "last_interaction": time.time(),
+                "last_message": message,
+                "last_reply": reply,
+                "reported": False,  # will be set True after ARIA tells the user
+                "interaction_count": existing.get("interaction_count", 0) + 1
+            }
 
         self._save(platform)
 
