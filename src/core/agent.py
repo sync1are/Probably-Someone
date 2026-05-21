@@ -14,6 +14,13 @@ class Agent:
     Can be used by CLI, Discord, or other interfaces.
     """
 
+    @staticmethod
+    def filter_tools(tools: List[Dict], disabled_names: List[str]) -> List[Dict]:
+        """Filters out tools that are in the disabled names list."""
+        if not disabled_names:
+            return tools
+        return [t for t in tools if t['function']['name'] not in disabled_names]
+
     def __init__(self, backend="ollama", model=None, system_prompt=None, tools=None, browser_headless=True, browser_backend=None, browser_model=None):
         self.llm_client = LLMClient(backend=backend)
         self.backend = backend

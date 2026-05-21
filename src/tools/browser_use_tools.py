@@ -16,25 +16,36 @@ def _get_cached_llm(backend: str = "ollama", model: Optional[str] = None, base_u
     global _cached_llm
 
     if _cached_llm is None:
-        try:
-            from browser_use.llm import ChatOllama
-        except ImportError as exc:
-            raise RuntimeError(
-                "Missing browser-use Ollama support. Install requirements, then run "
-                "'playwright install chromium'."
-            ) from exc
+        backend = os.getenv("BROWSER_USE_BACKEND", backend)
+        
+        if backend == "nvidia":
+            from langchain_openai import ChatOpenAI
+            _cached_llm = ChatOpenAI(
+                model=model or os.getenv("BROWSER_USE_MODEL", "meta/llama-3.1-70b-instruct"),
+                openai_api_base="https://integrate.api.nvidia.com/v1",
+                openai_api_key=os.getenv("NVIDIA_API_KEY"),
+                temperature=0.0,
+            )
+        else:
+            try:
+                from browser_use.llm import ChatOllama
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Missing browser-use Ollama support. Install requirements, then run "
+                    "'playwright install chromium'."
+                ) from exc
 
-        _cached_llm = ChatOllama(
-            model=os.getenv("BROWSER_USE_MODEL", "qwen3.5:cloud"),
-            host=base_url or os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-            ollama_options={
-                "temperature": 0.0,
-                "num_predict": int(os.getenv("BROWSER_USE_NUM_PREDICT", "512")),
-                "top_k": 10,
-                "top_p": 0.7,
-                "repeat_penalty": 1.1,
-            },
-        )
+            _cached_llm = ChatOllama(
+                model=model or os.getenv("BROWSER_USE_MODEL", "qwen3.5:cloud"),
+                host=base_url or os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+                ollama_options={
+                    "temperature": 0.0,
+                    "num_predict": int(os.getenv("BROWSER_USE_NUM_PREDICT", "512")),
+                    "top_k": 10,
+                    "top_p": 0.7,
+                    "repeat_penalty": 1.1,
+                },
+            )
 
     return _cached_llm
 
@@ -155,7 +166,9 @@ async def _run_browser_agent(task: str, backend: str, model: Optional[str], base
     llm = _get_cached_llm(backend=backend, model=model, base_url=base_url)
 
     if verbose:
-        print(f"[browser_use] Using {llm.provider} model: {llm.name}")
+        provider = getattr(llm, "provider", "nvidia/openai")
+        name = getattr(llm, "name", getattr(llm, "model_name", "unknown"))
+        print(f"[browser_use] Using {provider} model: {name}")
 
     # Strip screenshot instructions — handled by ARIA's take_screenshot tool, not browser-use
     clean_task = _strip_screenshot_instructions(task)

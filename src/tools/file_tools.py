@@ -30,14 +30,17 @@ def _ask_permission(action: str, filepath: str) -> bool:
 
     Falls back to a registered callback in non-TTY mode, or denies the request if none.
     """
+    # If a high-level handler (like the Web UI or Discord bridge) has already
+    # registered a callback, we use that first.
+    if _headless_permission_callback:
+        return _headless_permission_callback(action, filepath)
+
     try:
         is_tty = os.isatty(sys.stdin.fileno())
     except (AttributeError, OSError):
         is_tty = False
 
     if not is_tty:
-        if _headless_permission_callback:
-            return _headless_permission_callback(action, filepath)
         # Default: Deny in headless mode if no registered callback
         print(f"[ARIA] Denied {action} permission for {filepath} (headless, no callback registered)")
         return False
@@ -73,6 +76,8 @@ def _resolve_path(filename: str, create_new: bool = False) -> Path:
         matches = find_file(filename)
 
         if matches is None:
+            if not os.isatty(sys.stdin.fileno()):
+                raise FileNotFoundError(f"Could not determine working directory to find '{filename}'. Provide an absolute path.")
             print(f"\n⚠️  Could not determine the working directory to find '{filename}'.")
             while True:
                 try:
@@ -83,6 +88,8 @@ def _resolve_path(filename: str, create_new: bool = False) -> Path:
                 except EOFError:
                     break
         elif len(matches) == 0:
+            if not os.isatty(sys.stdin.fileno()):
+                raise FileNotFoundError(f"File '{filename}' not found. Provide an absolute path.")
             print(f"\n⚠️  The file '{filename}' was not found in the current context.")
             while True:
                 try:
@@ -96,6 +103,8 @@ def _resolve_path(filename: str, create_new: bool = False) -> Path:
             path = Path(matches[0]).expanduser().resolve()
             return path
         else:
+            if not os.isatty(sys.stdin.fileno()):
+                raise FileNotFoundError(f"Multiple matches found for '{filename}': {matches}. Provide an absolute path.")
             print(f"\n⚠️  Multiple matches found for '{filename}':")
             for i, match in enumerate(matches, 1):
                 print(f"   {i}. {match}")
