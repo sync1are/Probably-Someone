@@ -254,3 +254,12 @@ def my_custom_tool(sector):
 - **Triple AI Backends** - Seamlessly switch between zero-latency local models (Ollama), entirely custom/uncensored local models (LM Studio Drop-In), or massively scaled cloud models (NVIDIA NIM).
 - **Dynamic Schema Injection** - Actively intercepts and bridges user-friendly `tools.toml` definitions into ultra-strict OpenAI API specification payloads in memory.
 - **Multithreaded Messaging Engine** - Non-blocking message polling ensuring your WhatsApp and Discord bots remain fully responsive alongside the primary console.
+
+
+Small demo
+
+
+
+https://github.com/user-attachments/assets/b453e437-6e00-41e9-8ed8-9dcff0ecf774
+
+
